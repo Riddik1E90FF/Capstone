@@ -79,3 +79,7 @@ temp/
 
 # Keep documentation and small metadata files tracked.
 !data/README.md
+
+data/
+*.jsonl
+.pytest_cache/
