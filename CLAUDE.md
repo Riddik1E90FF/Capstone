@@ -272,19 +272,52 @@ If actual agent execution/thinking duration is unavailable, mark it as unavailab
 
 ---
 
-## First-session rule
+## Current project state
 
-If the repository is newly initialized and the core architecture is not yet finalized:
+**Week 1 of 10.** The proposal is accepted. The pre-registration is
+Stage-1 locked at `docs/PREREGISTRATION.md` (tag `prereg-v1.0`).
 
-**Do not immediately start writing the EEG pipeline or a large game.**
+Read before doing anything substantive:
 
-First audit the repository and identify the remaining blocking research/architecture decisions.
+1. `docs/PREREGISTRATION.md` - the binding experimental design
+2. `docs/DECISIONS.md` - what is settled and what is not
+3. `docs/ENVIRONMENT_SPEC.md` - the environment's scope and known limits
 
-The current major unresolved fork is the human's role during EEG recording. A favored proposal is:
+### What exists
 
-> The human plays the same combat environment offline while EEG is recorded; the resulting EEG/state data is replayed deterministically during RL training.
+- The combat environment (`combat_env/`), deterministic, tested, 25 difficulty
+  configurations, axes calibrated.
+- `scripts/` - human play and session recording, difficulty sweep, benchmarks.
+- `tests/` - 7 tests, determinism is the load-bearing one.
 
-This is a **strong recommendation, not yet a confirmed decision**, until the user adopts it.
+### What does not exist yet
+
+- The DQN. From scratch in NumPy. Not started.
+- The curriculum sampler.
+- The EEG pipeline.
+
+### Immediate priority (weeks 2-3)
+
+Two parallel tracks:
+
+- **Main:** nothing blocking - the environment is built.
+- **Parallel:** implement the from-scratch DQN and validate it on a benchmark
+  task **before** it touches the combat environment (Gate 1a). An algorithm
+  defect would degrade all seven experimental conditions equally and inflate
+  seed variance rather than failing visibly, so correctness has to be
+  demonstrated separately.
+
+### Hard constraints from the pre-registration
+
+- Seven conditions share **one** frontier-sampler implementation with the
+  ordering source injected. A test asserts this. Differing samplers would
+  confound the comparison.
+- The agent never receives EEG, inferred human state, or any privileged
+  information.
+- The reward function is **provisional** (`OPEN-06`). Changing it invalidates
+  cross-experiment comparison and must be recorded in the deviations log.
+- Any change to the locked pre-registration goes in its deviations log (section
+  12) with date, reason, and whether outcome data had been seen.
 
 ---
 

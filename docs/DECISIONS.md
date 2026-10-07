@@ -294,3 +294,74 @@ Avoid:
 - reads thoughts
 - detects exact emotions
 - objectively measures subjective mental state
+
+---
+
+## D026 — Difficulty axis calibration
+
+**Status:** CONFIRMED (2026-10-05)
+
+Telegraph duration levels widened from (0.70, 0.55, 0.42, 0.32, 0.24) s to
+(1.00, 0.66, 0.42, 0.24, 0.12) s.
+
+The original range moved agent hit rate by 0.016 across its whole span, which is
+nothing. The widened range moves it by 0.205. Measured by `scripts/axis_sweep.py`.
+
+Dodge invulnerability was swept over the same sweep and showed no measurable
+effect; it is left at 0.20 s rather than changed without evidence.
+
+Closes `OPEN-02`. Residual imbalance and the saturation limitation are documented
+in `docs/ENVIRONMENT_SPEC.md` section 6.
+
+---
+
+## D027 — Reverse-ordered curriculum condition
+
+**Status:** CONFIRMED (2026-09-16)
+
+A seventh condition, `REVERSE`, inverts the EEG-derived difficulty ranking.
+
+Motivated by Moravec's paradox: perception and reaction-speed demands that
+dominate human difficulty may be trivial for an agent, so the most useful
+human-derived curriculum could be the inverted one. The measured axis asymmetry
+in this environment is consistent with that.
+
+It is a deterministic transform of existing data and requires no additional
+collection. Its value is converting a possible null into an informative result:
+if forward ordering ties the shuffled control while reverse beats it, human
+difficulty transfers in inverted form.
+
+Pre-registered as H5, inside the Holm-corrected contrast family.
+
+---
+
+## D028 — From-scratch RL implementation, NumPy on CPU
+
+**Status:** CONFIRMED (2026-09-16, backend measured 2026-09-23)
+
+The DQN is implemented from scratch in NumPy. No Stable-Baselines3, no PyTorch
+dependency for the agent.
+
+Backend selection was measured rather than assumed. DQN update throughput for an
+18-128-128-12 network at the batch size training actually uses (64):
+
+| Backend | Updates/sec |
+|---|---|
+| NumPy (CPU) | 2,118 |
+| PyTorch (CPU) | 645 |
+| PyTorch (CUDA) | 292 |
+
+CUDA is 7.3x slower than NumPy at batch 64, and its throughput is nearly flat
+from batch 64 to 4096 — the signature of a launch-bound rather than compute-bound
+workload. The GPU does not overtake PyTorch-CPU until roughly batch 1024, sixteen
+times larger than DQN uses.
+
+Caveat: the NumPy implementation used plain SGD while PyTorch used Adam, so part
+of the CPU gap is optimiser cost rather than framework overhead.
+
+Correctness validation (Gate 1a) is a prerequisite for Gate 1: component unit
+tests, a benchmark task solved to its known threshold, and a reference
+implementation's learning curve tracked on that task — all before the agent
+touches the combat environment.
+
+Measured by `scripts/bench_backends.py`.

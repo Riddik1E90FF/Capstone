@@ -68,7 +68,7 @@ Two axes, five levels each, giving **25 configurations** indexed `config_id`
 
 | Axis | Levels | Mechanism |
 |---|---|---|
-| Telegraph duration | 0.70, 0.55, 0.42, 0.32, 0.24 s | Compresses the window to recognise and respond to an attack |
+| Telegraph duration | 1.00, 0.66, 0.42, 0.24, 0.12 s | Compresses the window to recognise and respond to an attack |
 | Attack gap | 1.60, 1.25, 0.95, 0.72, 0.52 s | Removes recovery windows, forces stamina management |
 
 All other parameters are constant across configurations.
@@ -77,30 +77,62 @@ Five configurations are reserved as the **held-out set** for generalization
 testing and are never sampled during training in any condition. The split is
 fixed before any experimental runs.
 
-## 6. Known issue: axis imbalance
+## 6. Difficulty axis calibration
 
-A scripted reactive policy over 40 episodes per cell produces a clear overall
-gradient (damage taken 23.1 at the easiest cell, 90.2 at the hardest; win rate
-1.00 to 0.65). The axes are **not balanced**, however:
+**Status: calibrated 2026-10-05.** The telegraph range was widened after the
+original setting proved nearly inert for the agent. See `OPEN-02` (now closed)
+and D026.
 
-- Shortening the gap raises damage taken by ~43.5 on average.
-- Shortening the telegraph raises it by ~17.3, and has **no effect at all** at
-  the sparsest gap level (32.8 across four of five telegraph levels).
+### The problem with the original setting
 
-The likely cause is that the 200 ms observation delay swamps the difference
-between a 0.70 s and a 0.24 s telegraph for a purely reactive policy.
+Under the original telegraph levels (0.70 - 0.24 s), a scripted reactive policy
+over 40 episodes per cell produced a clear overall gradient but badly unbalanced
+axes:
 
-This is unresolved (see `OPEN-02`). Candidate responses, to be decided before
-the human session is designed:
+- Shortening the attack gap raised damage taken by ~43.5 on average.
+- Shortening the telegraph raised it by ~17.3, with **no effect at all** at the
+  sparsest gap level.
 
-1. Widen the telegraph range, e.g. 0.90 s down to 0.15 s.
-2. Reduce the observation delay, accepting a less human-like agent.
-3. Shorten dodge invulnerability so timing precision matters more.
-4. Accept the imbalance, on the grounds that a *trained* agent may exploit
-   telegraph length differently than this scripted policy does.
+### Why damage taken is a misleading metric here
 
-Option 4 must not be assumed. The scripted policy is a smoke test, not a
-substitute for Gate 1.
+Damage taken conflates two quantities:
+
+```
+damage ~= (attacks faced) x (fraction that connect)
+```
+
+The attack gap axis controls the first term **mechanically** - halving the gap
+roughly doubles the attacks faced regardless of skill. Telegraph duration only
+affects the second term. Damage taken therefore structurally favours the gap
+axis, and **hit rate** (`times_hit / attacks_faced`) is the cleaner read on
+whether telegraph is doing anything.
+
+### Sweep results
+
+Measured by `scripts/axis_sweep.py`, 30 episodes per cell:
+
+| Setting | Telegraph -> damage | Gap -> damage | Telegraph -> hit rate |
+|---|---|---|---|
+| Original (0.70-0.24 s) | 16.6 | 43.5 | 0.016 |
+| **Selected (1.00-0.12 s)** | **30.6** | **45.0** | **0.205** |
+
+The hit-rate column is the decisive one. Under the original setting, going from
+the longest telegraph to the shortest changed hit rate by 0.016 - indistinguishable
+from nothing. Under the selected setting it changes by 0.205.
+
+Dodge invulnerability was also swept (0.20 / 0.12 / 0.10 s) and showed **no
+measurable effect** under the scripted policy. It is therefore left unchanged at
+0.20 s rather than altered without evidence.
+
+### Residual limitation
+
+At the sparsest attack gap, damage taken still saturates across the three
+shortest telegraph levels, because encounters end before telegraph length can
+express itself. The axes remain imperfectly balanced (telegraph effect is about
+0.68 of the gap effect, improved from 0.38).
+
+A scripted policy is a smoke test, not a trained agent. **Gate 2 is the real
+test** of whether these axes carry difficulty for both learners.
 
 ## 7. Reward function — PROVISIONAL
 

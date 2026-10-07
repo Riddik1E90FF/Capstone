@@ -33,7 +33,7 @@ DT: float = 1.0 / TICK_HZ
 #          stamina management under pressure.
 # --------------------------------------------------------------------------
 
-TELEGRAPH_LEVELS: tuple[float, ...] = (0.70, 0.55, 0.42, 0.32, 0.24)
+TELEGRAPH_LEVELS: tuple[float, ...] = (1.00, 0.66, 0.42, 0.24, 0.12)
 ATTACK_GAP_LEVELS: tuple[float, ...] = (1.60, 1.25, 0.95, 0.72, 0.52)
 
 N_TELEGRAPH_LEVELS = len(TELEGRAPH_LEVELS)
