@@ -334,6 +334,10 @@ component unit tests, solves a standard benchmark task to its known threshold,
 and tracks a reference implementation's learning curve on that task. Completed
 before the agent touches the combat environment, so that a Gate 1 failure is
 isolated to the environment rather than ambiguous.
+*Operational criteria* (benchmark, reference implementation, the four levels and
+their pass criteria, and the rule for calibrating thresholds on reference runs)
+are defined in `docs/DECISIONS.md` **D029**. Added 2026-10-07 as a clarification;
+see §12.
 
 **Gate 2 — human/agent difficulty correspondence.** Spearman correlation between
 human and agent per-configuration rankings is positive and non-trivial. **Uses no
@@ -386,7 +390,7 @@ reason, and whether outcome data had been seen.
 
 | Date | Section | Change | Reason | Outcome data seen? |
 |---|---|---|---|---|
-| — | — | — | — | — |
+| 2026-10-07 | §10 Gate 1a | **Clarification, no design change.** Gate 1a's criteria operationalised in `DECISIONS.md` D029: CartPole-v1 benchmark, CleanRL `dqn.py` reference, four levels, and pass-criterion form. Thresholds are calibrated on reference runs before any NumPy-DQN benchmark run. Pointer added to §10. | §10 said "tracks a reference implementation's learning curve" without defining *tracks*. The criterion has to be fixed before the curves exist rather than judged afterward. | No. No DQN, reference, or experimental-condition data existed. |
 
 **Pending and expected:** the Stage-2 amendment to §9 (seed count, smallest
 effect size) after Gate 1.

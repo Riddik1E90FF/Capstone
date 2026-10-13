@@ -156,7 +156,9 @@ This must be evaluated against capstone requirements before adoption.
 
 ## D014 — RL algorithm
 
-**Status:** OPEN
+**Status:** SUPERSEDED by D028 (2026-10-07). Original text kept as history.
+
+~~OPEN~~
 
 DQN, PPO, and actor-critic approaches have been discussed.
 
@@ -365,3 +367,107 @@ implementation's learning curve tracked on that task — all before the agent
 touches the combat environment.
 
 Measured by `scripts/bench_backends.py`.
+
+---
+
+## D029 — Gate 1a: benchmark, reference, and pass criteria
+
+**Status:** CONFIRMED (2026-10-07) for the four-level structure, benchmark,
+reference and dependency boundary. Items marked **PROPOSED** below depart from
+the user's draft criterion and await confirmation. Calibration **numbers** are
+**PENDING**: set from reference runs, before any full NumPy-DQN CartPole run.
+
+Operationalises pre-registration §10, Gate 1a, which requires "tracks a reference
+implementation's learning curve" but never defines *tracks*. Without a definition
+written in advance, the check gets judged by eye after the curves exist. This is
+an algorithm-correctness check on a benchmark task. It involves no combat-
+environment data and no experimental-condition data, so it does not touch the
+Stage-1 lock. It is recorded here and in §12 for provenance.
+
+### Benchmark and reference
+
+- **Benchmark:** Gymnasium `CartPole-v1`, with `gymnasium==0.29.1` (the version
+  CleanRL pins). A self-written benchmark could share the bug it exists to
+  detect, and the published threshold (475) only means something on the
+  canonical implementation. CartPole-v1 truncates at 500 steps, which exercises
+  the terminated/truncated distinction the combat env's 40 s timeout also has.
+- **Reference:** CleanRL `cleanrl/dqn.py` at commit
+  `fe8d8a03c41a7ef5b523e2e354bd01c363e786bb`, run **unmodified** with its own
+  default hyperparameters. Its output is converted to our log format after the
+  run, not by editing the script.
+- **Matched setup.** The NumPy DQN matches the reference wherever the reference
+  makes a choice: 120-84 ReLU MLP, PyTorch-default initialisation, Adam
+  (lr 2.5e-4, β = 0.9/0.999, ε = 1e-8), MSE TD loss, hard target sync every 500
+  steps, buffer 10,000, batch 128, γ = 0.99, learning starts at step 10,000,
+  train every 10 steps, ε-greedy annealed linearly from 1.0 to 0.05 over the first
+  250,000 of 500,000 steps, and only `terminated` (never `truncated`) masking the
+  bootstrap.
+- **Dependency boundary (does not conflict with D028).** Gymnasium, PyTorch and
+  CleanRL's dependencies are dev/validation-only (`requirements-dev.txt`). The
+  `dqn` package imports neither `gymnasium` nor `torch`, and a test enforces
+  this. Environments reach the agent through an injected factory that follows the
+  `reset`/`step` protocol `CombatEnv` already implements.
+
+### The four levels
+
+All four levels must pass, in order, before the agent touches the combat
+environment.
+
+| Level | Tests | Oracle | Catches |
+|---|---|---|---|
+| **L1** Component unit tests | Each component against its agreed interface spec, in isolation | The spec. Tests are written before the implementation, by a different author. Finite-difference gradients; `torch.optim.Adam` (dev-only) for the optimiser | A wrong component |
+| **L2** Analytic-oracle integration | The full training loop, with real buffer, target net and schedule, on a small MDP with hand-derived Q\*. The MDP contains both a terminal transition and a truncation | Closed-form Q\*, derived on paper. Tolerance fixed in the test before it is run | Wrong composition: step ordering, episode-boundary handling, terminated/truncated routing through loop and buffer, γ, sync cadence |
+| **L3** Benchmark threshold | NumPy DQN on CartPole-v1 | The published threshold, with the calibration rule below | "Doesn't learn" |
+| **L4** Reference tracking | NumPy DQN against CleanRL, same protocol | Reference runs | "Learns, but wrongly": slower, noisier, or collapse-prone |
+
+**L1 and L2 stay separate levels.** L2 is run by pytest, but its oracle is
+independent mathematics, not a component spec. A loop built only from
+L1-correct components can still fail L2. Examples: storing the post-reset
+observation as `s'` on a truncated step, or syncing the target network before
+the first update instead of after.
+
+**L3 is nearly nested in L4.** Steps-to-threshold is only defined if the
+threshold is reached. L3 is kept because it is the pre-registered absolute
+criterion and is cheap to check first.
+
+### Protocol
+
+- **Per-seed metrics**, computed from per-episode training returns (exploration
+  on, as CleanRL logs them):
+  - *Steps-to-threshold:* the first `global_step` at which the 100-episode moving
+    average reaches T. A seed that never reaches it is censored at
+    `total_timesteps`.
+  - *Final return:* the mean return of the last 100 training episodes.
+- **Seeds.** **PROPOSED: 10 reference seeds and 10 NumPy-DQN seeds** (integers
+  1–10), not the drafted 5. With 5 seeds an IQM is roughly the mean of the middle
+  two or three values, and a bootstrap over 5 values has only 126 distinct
+  resamples, too coarse for a CI. CartPole compute is negligible.
+- **L3 pass:** the NumPy DQN reaches T in at least *k* of 10 seeds.
+- **L4 pass, part 1:** median steps-to-threshold for the NumPy DQN ≤ F × the
+  reference median. If more than half of the NumPy seeds are censored, the median
+  is undefined and this part fails.
+- **L4 pass, part 2.** **PROPOSED: one-sided non-inferiority on the point
+  estimate**, replacing the drafted "final-return IQM CIs overlap". Pass if
+  IQM(NumPy) ≥ IQM(ref) − δ. Reason: CI overlap gets *easier to pass as variance
+  grows*, and excess seed variance is the signature of the defects Gate 1a exists
+  to catch. Beating the reference is not treated as a defect.
+
+### Numbers: rule fixed now, values after reference runs
+
+| Number | Fixed now | Set from reference runs by this rule |
+|---|---|---|
+| F (steps factor) | **2** | **PROPOSED:** F = max(2, q), where q is the 95th percentile of the median-steps ratio between two bootstrap-resampled 10-seed groups of the reference itself. This stops the reference failing its own criterion. |
+| T (threshold) | 475 by default | If fewer than 8 of 10 reference seeds reach 475, T = the highest multiple of 25 that ≥ 8 of 10 reference seeds reach. |
+| *k* (L3 seed count) | — | The number of reference seeds reaching T, minus 2. |
+| δ (final-return margin) | — | **PROPOSED:** the 95th percentile of IQM(A) − IQM(B), where A and B are bootstrap-resampled 10-seed groups of the reference. A correct implementation then passes about 95% of the time. |
+
+The calibrated values are appended to this entry with their date **before** any
+full NumPy-DQN CartPole run. Short smoke runs during development do not count as
+outcome data for this gate, but their results must not be used to set any number
+above.
+
+### Attempts
+
+Every Gate 1a attempt is logged with its date, commit, levels run and result,
+including failures. Fixing a defect and re-running is the intended use of the
+gate. Re-running unchanged code with new seeds until it passes is not.
