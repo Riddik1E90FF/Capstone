@@ -83,3 +83,6 @@ temp/
 data/
 *.jsonl
 .pytest_cache/
+
+Presentations/
+*.docx

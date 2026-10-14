@@ -9,10 +9,12 @@ from pathlib import Path
 from threading import Lock
 
 ROOT = Path(os.environ.get("CLAUDE_PROJECT_DIR", Path(__file__).resolve().parents[1]))
-LOG_DIR = ROOT / "tracker" / "logs"
-RUNTIME_DIR = ROOT / "tracker" / "runtime"
+TRACKER_DIR = ROOT / "tracker"
+LOG_DIR = TRACKER_DIR / "logs"
+RUNTIME_DIR = TRACKER_DIR / "runtime"
 EVENT_LOG = LOG_DIR / "claude_events.jsonl"
 STATE_FILE = RUNTIME_DIR / "state.json"
+CATEGORY_FILE = RUNTIME_DIR / "current_category.json"
 LOCK = Lock()
 
 LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -37,6 +39,13 @@ def save_state(state):
     tmp.write_text(json.dumps(state, indent=2), encoding="utf-8")
     tmp.replace(STATE_FILE)
 
+def load_category():
+    try:
+        data = json.loads(CATEGORY_FILE.read_text(encoding="utf-8"))
+        return data.get("category", "Uncategorized")
+    except (FileNotFoundError, json.JSONDecodeError):
+        return "Uncategorized"
+
 def short_hash(text):
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
 
@@ -51,6 +60,7 @@ def main():
     prompt_id = data.get("prompt_id")
     mono = time.monotonic()
     timestamp = now_iso()
+    category = load_category()
 
     state = load_state()
     sessions = state.setdefault("sessions", {})
@@ -65,6 +75,7 @@ def main():
         "cwd": data.get("cwd"),
         "agent_id": data.get("agent_id"),
         "agent_type": data.get("agent_type"),
+        "category": category,
     }
 
     if event == "SessionStart":
@@ -84,7 +95,7 @@ def main():
 
     elif event == "UserPromptSubmit":
         key = prompt_id or f"{session_id}:{mono}"
-        turns[key] = {"start_iso": timestamp, "start_mono": mono}
+        turns[key] = {"start_iso": timestamp, "start_mono": mono, "category": category}
         prompt = data.get("prompt", "")
         record["prompt_chars"] = len(prompt)
         record["prompt_hash"] = short_hash(prompt) if prompt else None
@@ -94,6 +105,7 @@ def main():
         if start:
             record["turn_duration_ms"] = round((mono - start["start_mono"]) * 1000)
             record["turn_start_iso"] = start["start_iso"]
+            record["category"] = start.get("category", category)
         record["failure"] = event == "StopFailure"
 
     elif event == "PreToolUse":

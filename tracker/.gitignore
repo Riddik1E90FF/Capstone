@@ -1,2 +1,3 @@
 logs/
-runtime/
+runtime/*
+!runtime/chat_tracker_config.example.json
