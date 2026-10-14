@@ -472,3 +472,70 @@ above.
 Every Gate 1a attempt is logged with its date, commit, levels run and result,
 including failures. Fixing a defect and re-running is the intended use of the
 gate. Re-running unchanged code with new seeds until it passes is not.
+
+---
+
+## D030 — Remove `block_move_scale` from `EnvParams`
+
+**Status:** CONFIRMED (2026-10-14)
+
+`EnvParams.block_move_scale` (0.35) and its one call site in
+`CombatEnv._apply_agent_action` were removed.
+
+**Why it was dead code, not an oversight.** The action space is discrete, with
+one action per decision (D-pad style): idle, 8 moves, attack, dodge, block.
+`is_blocking` is set to `action == BLOCK`, and the movement branch runs only for
+move actions. A single action cannot be both a move and a block, so the agent
+can never block and move on the same tick, and the blocking-movement penalty
+could never apply. Do not re-add it unless the action space changes to allow
+simultaneous block-and-move, e.g. a factored or multi-discrete action space.
+That would be an environment redesign requiring a §12 deviation.
+
+**Verified, not assumed.** Behaviour is byte-identical:
+
+- `scripts/axis_sweep.py` output diffed before and after: empty.
+- A behavioural fingerprint over all 25 configurations × 5 seeds with a random
+  policy matched exactly. It hashes every observation, reward, termination flag,
+  info dict, final episode stats and end-of-episode RNG state.
+
+No pre-registration deviation is needed, since no behaviour changed.
+
+**`exhausted_penalty_scale` is deliberately kept.** It looks similar but is not
+structurally unreachable. Every stamina cost is gated on `stamina >= cost`, so
+stamina never goes negative. It can still reach exactly 0.0 if a blocked hit
+(cost 18) lands with stamina at exactly 18.0, since blocking also suppresses
+regen. The next move would then be slowed. Landing on exactly 18.0 requires a
+floating-point coincidence among regen steps of 26/30. It was observed zero
+times in about 258k movement ticks, but it is not impossible, so it stays.
+
+---
+
+## D031 — Simultaneous death resolves as a loss
+
+**Status:** CONFIRMED (2026-10-14)
+
+`CombatEnv._resolve_termination` now checks agent death before enemy death. A
+tick on which both reach 0 health ends with outcome `loss`: −30 loss penalty, no
+win bonus, not a success.
+
+**Before:** enemy death was checked first, so a mutual KO counted as a `win`.
+That paid +60 on top of the damage penalty for the hit taken, and counted
+toward per-configuration success rates. An instrumented probe found 4 such
+episodes in 1,000: 25 configurations × 20 seeds × 2 policies.
+
+**Why loss:**
+
+- A value learner should not learn that trading its own life for the kill is
+  rewarded as a win.
+- "You died" is also what a human player sees, which matters for the
+  human/agent difficulty comparison at Gate 2.
+- The alternative, a separate `draw` outcome, was rejected: it adds a fourth
+  outcome value that the success-rate definitions, tests and scripts would all
+  need to handle.
+
+**Impact:** a change to environment behaviour, and through the terminal bonus
+to the provisional reward (OPEN-06), so it is recorded in pre-registration §12.
+`scripts/axis_sweep.py` output and the 125-episode fingerprint were unchanged,
+because none of those episodes contain a mutual KO. No agent-training,
+human-session or experimental-condition data existed when it was made.
+Regression test: `tests/test_env.py::test_simultaneous_death_is_a_loss`.

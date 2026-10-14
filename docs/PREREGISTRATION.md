@@ -391,6 +391,7 @@ reason, and whether outcome data had been seen.
 | Date | Section | Change | Reason | Outcome data seen? |
 |---|---|---|---|---|
 | 2026-10-07 | §10 Gate 1a | **Clarification, no design change.** Gate 1a's criteria operationalised in `DECISIONS.md` D029: CartPole-v1 benchmark, CleanRL `dqn.py` reference, four levels, and pass-criterion form. Thresholds are calibrated on reference runs before any NumPy-DQN benchmark run. Pointer added to §10. | §10 said "tracks a reference implementation's learning curve" without defining *tracks*. The criterion has to be fixed before the curves exist rather than judged afterward. | No. No DQN, reference, or experimental-condition data existed. |
+| 2026-10-14 | §5 Environment | **Environment behaviour change.** A tick on which agent and enemy both reach 0 health now resolves as `loss` (previously `win`, which paid the +60 win bonus and counted as a success). See `DECISIONS.md` D031. | Checking enemy death first rewarded trading the agent's life for the kill and counted mutual KOs as successes in the per-configuration rates used at Gates 1 and 2. | No. No agent-training, human-session or experimental-condition data existed. |
 
 **Pending and expected:** the Stage-2 amendment to §9 (seed count, smallest
 effect size) after Gate 1.

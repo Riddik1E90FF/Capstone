@@ -46,9 +46,11 @@ random from the seeded generator.
 **Agent actions (12, discrete):** idle, 8 movement directions, attack, dodge,
 block. Dodge travels in the last movement direction and grants 0.20 s of
 invulnerability. Block scales incoming damage to 0.35 at a stamina cost.
+Block is its own action, so the agent cannot move while blocking (D030).
 
 **Episode:** one encounter. Terminates on enemy death (`win`), agent death
-(`loss`), or 40 s (`timeout`). Success is defined as `win`.
+(`loss`), or 40 s (`timeout`). Success is defined as `win`. If both die on
+the same tick, the outcome is `loss` (D031).
 
 ## 4. Observation space
 

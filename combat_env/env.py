@@ -23,26 +23,46 @@ from __future__ import annotations
 
 import math
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import IntEnum
 from typing import Any
 
 import numpy as np
 
-from .config import ATTACKS, DT, N_ATTACKS, TICK_HZ, DifficultyConfig, EnvConfig
+from .config import (
+    ATTACKS,
+    DT,
+    N_ATTACKS,
+    TICK_HZ,
+    AttackSpec,
+    DifficultyConfig,
+    EnvConfig,
+)
+
+# Geometry constants that are not in EnvParams.  They are part of the frozen
+# dynamics all the same.
+_SPAWN_DISTANCE = 3.2   # enemy's distance from the agent at reset
+_ENGAGE_MARGIN = 0.8    # enemy starts an attack within reach + this margin
+_EPS = 1e-8             # below this distance, a direction is undefined
 
 # --------------------------------------------------------------------------
 # Action space (discrete, 12)
 # --------------------------------------------------------------------------
 
-_D = 0.7071067811865476
+_DIAG = 0.7071067811865476  # 1/sqrt(2), written out so the value is fixed
+# Unit (x, y) vectors, +y is north, in the same order as MOVE_N..MOVE_NW.
 MOVE_DIRECTIONS: tuple[tuple[float, float], ...] = (
-    (0.0, 1.0), (_D, _D), (1.0, 0.0), (_D, -_D),
-    (0.0, -1.0), (-_D, -_D), (-1.0, 0.0), (-_D, _D),
+    (0.0, 1.0), (_DIAG, _DIAG), (1.0, 0.0), (_DIAG, -_DIAG),
+    (0.0, -1.0), (-_DIAG, -_DIAG), (-1.0, 0.0), (-_DIAG, _DIAG),
 )
 
 
 class Action(IntEnum):
+    """One action per decision, held for `action_repeat` ticks.
+
+    Actions are mutually exclusive: there is no move-while-blocking.
+    """
+
     IDLE = 0
     MOVE_N = 1
     MOVE_NE = 2
@@ -61,6 +81,11 @@ N_ACTIONS = len(Action)
 
 
 class EnemyPhase(IntEnum):
+    """Enemy attack cycle: IDLE -> TELEGRAPH -> ACTIVE -> RECOVERY -> IDLE.
+
+    The integer values index the phase one-hot in the observation.
+    """
+
     IDLE = 0
     TELEGRAPH = 1
     ACTIVE = 2
@@ -71,7 +96,10 @@ OBS_DIM = 18
 
 
 def secs_to_ticks(seconds: float) -> int:
-    """Convert a duration to whole ticks, always at least one."""
+    """Convert a duration to whole ticks, always at least one.
+
+    Uses Python's `round`, so exact half-ticks round to even.
+    """
     return max(1, int(round(seconds * TICK_HZ)))
 
 
@@ -99,9 +127,11 @@ class EpisodeStats:
 
     @property
     def dodge_rate(self) -> float:
+        """Successful dodges / dodges attempted; 0.0 if none were attempted."""
         return self.dodges_successful / self.dodges_attempted if self.dodges_attempted else 0.0
 
     def as_dict(self) -> dict[str, Any]:
+        """Flat, JSON-serialisable record including the derived fields."""
         return {
             "ticks": self.ticks,
             "seconds": self.ticks * DT,
@@ -122,24 +152,30 @@ class EpisodeStats:
 
 
 class CombatEnv:
-    """One agent, one enemy, one difficulty configuration."""
+    """One agent, one enemy, one difficulty configuration.
+
+    RNG use is part of the determinism contract: exactly one draw per reset
+    (spawn angle) and one per enemy attack (which attack).  The constructor
+    also performs a reset, so `reset()` without a seed continues the stream
+    from after that first draw.
+    """
 
     def __init__(self, config: EnvConfig, seed: int | None = None) -> None:
+        # Short names `p` and `w` are read by scripts/play.py; keep them.
         self.cfg = config
         self.p = config.params
         self.w = config.rewards
         self._rng = np.random.default_rng(seed)
 
         # Pre-convert every duration to ticks once.
-        self._attack_windup_t = secs_to_ticks(self.p.agent_attack_windup)
-        self._attack_cd_t = secs_to_ticks(self.p.agent_attack_cooldown)
-        self._dodge_dur_t = secs_to_ticks(self.p.dodge_duration)
-        self._dodge_if_t = secs_to_ticks(self.p.dodge_iframes)
-        self._dodge_cd_t = secs_to_ticks(self.p.dodge_cooldown)
-        self._gap_t = secs_to_ticks(config.difficulty.attack_gap)
+        self._attack_windup_ticks = secs_to_ticks(self.p.agent_attack_windup)
+        self._attack_cooldown_ticks = secs_to_ticks(self.p.agent_attack_cooldown)
+        self._dodge_duration_ticks = secs_to_ticks(self.p.dodge_duration)
+        self._dodge_iframe_ticks = secs_to_ticks(self.p.dodge_iframes)
+        self._dodge_cooldown_ticks = secs_to_ticks(self.p.dodge_cooldown)
+        self._attack_gap_ticks = secs_to_ticks(config.difficulty.attack_gap)
 
         self._obs_buffer: deque[np.ndarray] = deque()
-        self.stats = EpisodeStats()
         self._reset_state()
 
     # ------------------------------------------------------------------
@@ -147,6 +183,11 @@ class CombatEnv:
     # ------------------------------------------------------------------
 
     def reset(self, seed: int | None = None) -> tuple[np.ndarray, dict[str, Any]]:
+        """Start a new episode; reseed the RNG only if `seed` is given.
+
+        The observation delay buffer is pre-filled with the initial frame, so
+        the first `observation_delay_ticks` observations repeat it.
+        """
         if seed is not None:
             self._rng = np.random.default_rng(seed)
         self._reset_state()
@@ -162,10 +203,10 @@ class CombatEnv:
         self.stats = EpisodeStats()
 
         angle = float(self._rng.uniform(0.0, 2.0 * math.pi))
-        dist = 3.2
         self.agent_pos = np.array([0.0, 0.0], dtype=np.float64)
         self.enemy_pos = np.array(
-            [dist * math.cos(angle), dist * math.sin(angle)], dtype=np.float64
+            [_SPAWN_DISTANCE * math.cos(angle), _SPAWN_DISTANCE * math.sin(angle)],
+            dtype=np.float64,
         )
         self.facing = np.array([math.cos(angle), math.sin(angle)], dtype=np.float64)
 
@@ -184,8 +225,8 @@ class CombatEnv:
 
         self.enemy_phase = EnemyPhase.IDLE
         self.enemy_phase_start_tick = 0
-        self.enemy_phase_end_tick = self._gap_t
-        self.enemy_attack_idx = 0
+        self.enemy_phase_end_tick = self._attack_gap_ticks
+        self.enemy_attack_idx = 0  # index into ATTACKS; stale outside TELEGRAPH..RECOVERY
         self._active_hit_applied = False
         self._active_dodged = False
 
@@ -197,14 +238,19 @@ class CombatEnv:
     # ------------------------------------------------------------------
 
     def step(self, action: int) -> tuple[np.ndarray, float, bool, bool, dict[str, Any]]:
-        """Advance by `action_repeat` ticks holding `action` constant."""
+        """Advance by `action_repeat` ticks holding `action` constant.
+
+        Stops early if the episode ends mid-repeat.  `time_penalty` is charged
+        once per call regardless.  The returned observation is the one from
+        `observation_delay_ticks` buffer entries ago, not the current state.
+        """
         if self.terminated or self.truncated:
             raise RuntimeError("step() called on a finished episode; call reset()")
 
         act = Action(int(action))
         reward = 0.0
         for _ in range(self.p.action_repeat):
-            reward += self._tick(act)
+            reward += self._advance_one_tick(act)
             if self.terminated or self.truncated:
                 break
 
@@ -218,13 +264,14 @@ class CombatEnv:
             self._info(),
         )
 
-    def _tick(self, action: Action) -> float:
+    def _advance_one_tick(self, action: Action) -> float:
+        """One simulation tick.  The order of the sub-steps is part of the dynamics."""
         self.tick += 1
         self.stats.ticks = self.tick
 
         self.is_blocking = action == Action.BLOCK
-        reward = self._apply_agent_action(action)
-        reward += self._resolve_agent_attack()
+        self._apply_agent_action(action)
+        reward = self._resolve_agent_attack()
         reward += self._update_enemy()
         self._regen_stamina()
         self._resolve_termination()
@@ -247,17 +294,21 @@ class CombatEnv:
     def _invulnerable(self) -> bool:
         return self.tick <= self.iframe_until_tick
 
-    def _apply_agent_action(self, action: Action) -> float:
+    def _apply_agent_action(self, action: Action) -> None:
+        """Start moves, dodges and attacks.  Never produces reward directly."""
         # A dodge in progress overrides everything until it finishes.
         if self._dodging:
             self._move(self.agent_pos, self.dodge_dir, self.p.dodge_speed)
-            return 0.0
+            return
 
         if Action.MOVE_N <= action <= Action.MOVE_NW:
             direction = np.array(MOVE_DIRECTIONS[action - Action.MOVE_N])
             speed = self.p.agent_speed
-            if self.is_blocking:
-                speed *= self.p.block_move_scale
+            # No blocking slow-down here: a move action is never a block action,
+            # so the agent cannot block while moving (D030).
+            # Practically unreachable but kept (D030): stamina never goes below
+            # 0, and reaches exactly 0.0 only if a blocked hit lands with stamina
+            # at exactly block_stamina_per_hit, which needs a float coincidence.
             if self.agent_stamina <= 0.0:
                 speed *= self.p.exhausted_penalty_scale
             self._move(self.agent_pos, direction, speed)
@@ -267,9 +318,9 @@ class CombatEnv:
             if self.tick >= self.dodge_ready_tick and self.agent_stamina >= self.p.dodge_stamina:
                 self.agent_stamina -= self.p.dodge_stamina
                 self.stats.stamina_spent += self.p.dodge_stamina
-                self.dodge_ready_tick = self.tick + self._dodge_cd_t
-                self.dodge_until_tick = self.tick + self._dodge_dur_t
-                self.iframe_until_tick = self.tick + self._dodge_if_t
+                self.dodge_ready_tick = self.tick + self._dodge_cooldown_ticks
+                self.dodge_until_tick = self.tick + self._dodge_duration_ticks
+                self.iframe_until_tick = self.tick + self._dodge_iframe_ticks
                 self.dodge_dir = self.facing.copy()
                 self.stats.dodges_attempted += 1
 
@@ -283,9 +334,8 @@ class CombatEnv:
                 self.agent_stamina -= self.p.agent_attack_stamina
                 self.stats.stamina_spent += self.p.agent_attack_stamina
                 self.stats.attacks_thrown += 1
-                self.attack_ready_tick = self.tick + self._attack_cd_t
-                self.attack_resolve_tick = self.tick + self._attack_windup_t
-        return 0.0
+                self.attack_ready_tick = self.tick + self._attack_cooldown_ticks
+                self.attack_resolve_tick = self.tick + self._attack_windup_ticks
 
     def _resolve_agent_attack(self) -> float:
         """Land the agent's attack on exactly the scheduled tick."""
@@ -316,13 +366,16 @@ class CombatEnv:
     # ------------------------------------------------------------------
 
     def _update_enemy(self) -> float:
+        """Advance the enemy's attack cycle one tick; return the reward it causes."""
         reward = 0.0
         spec = ATTACKS[self.enemy_attack_idx]
         phase_over = self.tick >= self.enemy_phase_end_tick
 
         if self.enemy_phase == EnemyPhase.IDLE:
             self._approach()
-            if phase_over and self._distance() <= spec.reach + 0.8:
+            # The range test uses the *previous* attack's reach; the next attack
+            # is only drawn once it passes.
+            if phase_over and self._distance() <= spec.reach + _ENGAGE_MARGIN:
                 self.enemy_attack_idx = int(self._rng.integers(N_ATTACKS))
                 spec = ATTACKS[self.enemy_attack_idx]
                 self._enter_phase(
@@ -353,7 +406,7 @@ class CombatEnv:
 
         elif self.enemy_phase == EnemyPhase.RECOVERY:
             if phase_over:
-                self._enter_phase(EnemyPhase.IDLE, self._gap_t)
+                self._enter_phase(EnemyPhase.IDLE, self._attack_gap_ticks)
         return reward
 
     def _enter_phase(self, phase: EnemyPhase, duration_ticks: int) -> None:
@@ -362,9 +415,14 @@ class CombatEnv:
         self.enemy_phase_end_tick = self.tick + duration_ticks
 
     def _approach(self, speed: float | None = None) -> None:
+        """Move the enemy toward the agent.
+
+        With no `speed` (normal walking) the enemy backs off when inside its
+        preferred range.  With an explicit `speed` (a lunge) it always closes.
+        """
         delta = self.agent_pos - self.enemy_pos
         dist = float(np.linalg.norm(delta))
-        if dist < 1e-8:
+        if dist < _EPS:
             return
         direction = delta / dist
         if speed is None:
@@ -373,7 +431,8 @@ class CombatEnv:
                 direction = -direction
         self._move(self.enemy_pos, direction, speed)
 
-    def _resolve_enemy_hit(self, spec) -> float:
+    def _resolve_enemy_hit(self, spec: AttackSpec) -> float:
+        """Apply at most one hit per active window; block reduces it if stamina allows."""
         if self._active_hit_applied:
             return 0.0
         if self._distance() > spec.reach:
@@ -400,12 +459,15 @@ class CombatEnv:
     # ------------------------------------------------------------------
 
     def _resolve_termination(self) -> None:
-        if self.enemy_health <= 0.0:
-            self.terminated = True
-            self.stats.outcome = "win"
-        elif self.agent_health <= 0.0:
+        # Agent death is checked first, so a tick where both die is a loss
+        # (D031).  Trading your own life for the kill must not earn the win
+        # bonus or count as a success.
+        if self.agent_health <= 0.0:
             self.terminated = True
             self.stats.outcome = "loss"
+        elif self.enemy_health <= 0.0:
+            self.terminated = True
+            self.stats.outcome = "win"
         elif self.tick >= self.p.max_episode_ticks:
             self.truncated = True
             self.stats.outcome = "timeout"
@@ -423,7 +485,7 @@ class CombatEnv:
         """
         delta = self.enemy_pos - self.agent_pos
         dist = float(np.linalg.norm(delta))
-        unit = delta / dist if dist > 1e-8 else np.zeros(2)
+        unit = delta / dist if dist > _EPS else np.zeros(2)
 
         phase_onehot = np.zeros(4, dtype=np.float64)
         phase_onehot[int(self.enemy_phase)] = 1.0
@@ -433,8 +495,8 @@ class CombatEnv:
         span = max(1, self.enemy_phase_end_tick - self.enemy_phase_start_tick)
         progress = float(np.clip((self.tick - self.enemy_phase_start_tick) / span, 0.0, 1.0))
 
-        attack_cd_norm = max(0, self.attack_ready_tick - self.tick) / self._attack_cd_t
-        dodge_cd_norm = max(0, self.dodge_ready_tick - self.tick) / self._dodge_cd_t
+        attack_cd_norm = max(0, self.attack_ready_tick - self.tick) / self._attack_cooldown_ticks
+        dodge_cd_norm = max(0, self.dodge_ready_tick - self.tick) / self._dodge_cooldown_ticks
 
         obs = np.concatenate([
             unit,                                                    # 0:2
@@ -454,6 +516,8 @@ class CombatEnv:
         return obs.astype(np.float64)
 
     def _info(self) -> dict[str, Any]:
+        """`stats` is the live object, not a snapshot: it keeps changing on
+        later steps until the next reset replaces it."""
         return {
             "config_id": self.cfg.difficulty.config_id,
             "tick": self.tick,
@@ -463,11 +527,12 @@ class CombatEnv:
         }
 
 
-def make_env(config_id: int, seed: int | None = None, **overrides) -> CombatEnv:
-    """Convenience constructor: `make_env(7, seed=0)`."""
-    from dataclasses import replace as _replace
+def make_env(config_id: int, seed: int | None = None, **overrides: Any) -> CombatEnv:
+    """Convenience constructor: `make_env(7, seed=0)`.
 
+    `overrides` replace `EnvConfig` fields, e.g. `params=EnvParams(...)`.
+    """
     cfg = EnvConfig(difficulty=DifficultyConfig.from_id(config_id))
     if overrides:
-        cfg = _replace(cfg, **overrides)
+        cfg = replace(cfg, **overrides)
     return CombatEnv(cfg, seed=seed)

@@ -77,3 +77,16 @@ def test_step_after_done_raises():
             break
     with pytest.raises(RuntimeError):
         env.step(0)
+
+
+def test_simultaneous_death_is_a_loss():
+    # D031: when both reach 0 health on the same tick, the agent's death wins
+    # the tie, so trading your life for the kill is never scored as success.
+    env = make_env(0, seed=0)
+    env.reset(seed=0)
+    env.agent_health = 0.0
+    env.enemy_health = 0.0
+    env._resolve_termination()
+    assert env.terminated
+    assert env.stats.outcome == "loss"
+    assert not env.stats.success

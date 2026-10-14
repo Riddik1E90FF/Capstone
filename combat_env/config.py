@@ -56,16 +56,22 @@ class DifficultyConfig:
     def config_id(self) -> int:
         return self.telegraph_level * N_GAP_LEVELS + self.gap_level
 
+    # The two duration properties read the module-level level tables on every
+    # call rather than caching them.  scripts/axis_sweep.py relies on this: it
+    # swaps `TELEGRAPH_LEVELS` at runtime to compare candidate settings.
+
     @property
     def telegraph_duration(self) -> float:
+        """Base wind-up in seconds, before the attack's `telegraph_scale`."""
         return TELEGRAPH_LEVELS[self.telegraph_level]
 
     @property
     def attack_gap(self) -> float:
+        """Enemy idle time in seconds between one attack's recovery and the next."""
         return ATTACK_GAP_LEVELS[self.gap_level]
 
     @staticmethod
-    def from_id(config_id: int) -> "DifficultyConfig":
+    def from_id(config_id: int) -> DifficultyConfig:
         if not 0 <= config_id < N_CONFIGS:
             raise ValueError(f"config_id must be in [0, {N_CONFIGS}), got {config_id}")
         return DifficultyConfig(
@@ -127,6 +133,11 @@ N_ATTACKS = len(ATTACKS)
 
 @dataclass(frozen=True)
 class EnvParams:
+    """Physical constants.  Distances in arena units, speeds in units/s,
+    durations in seconds (converted to whole ticks once, at env construction),
+    stamina regen in points/s.
+    """
+
     arena_radius: float = 6.0
 
     agent_max_health: float = 100.0
@@ -146,7 +157,8 @@ class EnvParams:
 
     block_damage_scale: float = 0.35
     block_stamina_per_hit: float = 18.0
-    block_move_scale: float = 0.35
+    # No block_move_scale: the single-action space cannot block and move on
+    # the same tick, so a blocking movement penalty could never apply (D030).
 
     stamina_regen: float = 26.0
     exhausted_penalty_scale: float = 0.55
@@ -176,8 +188,8 @@ class EnvParams:
 # 1 can be attempted; they are not a decision.  The failure mode to watch for
 # is a policy that survives by never attacking, which `time_penalty` and
 # `win_bonus` are meant to discourage.  Any change here invalidates
-# cross-experiment comparison and must be recorded before the pre-registration
-# is locked.
+# cross-experiment comparison and must be recorded in the pre-registration's
+# deviations log (docs/PREREGISTRATION.md section 12).
 # --------------------------------------------------------------------------
 
 
@@ -199,5 +211,5 @@ class EnvConfig:
     params: EnvParams = field(default_factory=EnvParams)
     rewards: RewardWeights = field(default_factory=RewardWeights)
 
-    def with_difficulty(self, config_id: int) -> "EnvConfig":
+    def with_difficulty(self, config_id: int) -> EnvConfig:
         return replace(self, difficulty=DifficultyConfig.from_id(config_id))
