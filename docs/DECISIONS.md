@@ -373,8 +373,9 @@ Measured by `scripts/bench_backends.py`.
 ## D029 — Gate 1a: benchmark, reference, and pass criteria
 
 **Status:** CONFIRMED (2026-10-07) for the four-level structure, benchmark,
-reference and dependency boundary. Items marked **PROPOSED** below depart from
-the user's draft criterion and await confirmation. Calibration **numbers** are
+reference and dependency boundary. The criterion details that departed from the
+user's first draft (10 seeds, non-inferiority instead of CI overlap, the F and δ
+calibration rules) were CONFIRMED 2026-10-13. Calibration **numbers** are
 **PENDING**: set from reference runs, before any full NumPy-DQN CartPole run.
 
 Operationalises pre-registration §10, Gate 1a, which requires "tracks a reference
@@ -438,7 +439,7 @@ criterion and is cheap to check first.
     average reaches T. A seed that never reaches it is censored at
     `total_timesteps`.
   - *Final return:* the mean return of the last 100 training episodes.
-- **Seeds.** **PROPOSED: 10 reference seeds and 10 NumPy-DQN seeds** (integers
+- **Seeds.** **10 reference seeds and 10 NumPy-DQN seeds** (integers
   1–10), not the drafted 5. With 5 seeds an IQM is roughly the mean of the middle
   two or three values, and a bootstrap over 5 values has only 126 distinct
   resamples, too coarse for a CI. CartPole compute is negligible.
@@ -446,7 +447,7 @@ criterion and is cheap to check first.
 - **L4 pass, part 1:** median steps-to-threshold for the NumPy DQN ≤ F × the
   reference median. If more than half of the NumPy seeds are censored, the median
   is undefined and this part fails.
-- **L4 pass, part 2.** **PROPOSED: one-sided non-inferiority on the point
+- **L4 pass, part 2.** **One-sided non-inferiority on the point
   estimate**, replacing the drafted "final-return IQM CIs overlap". Pass if
   IQM(NumPy) ≥ IQM(ref) − δ. Reason: CI overlap gets *easier to pass as variance
   grows*, and excess seed variance is the signature of the defects Gate 1a exists
@@ -456,10 +457,10 @@ criterion and is cheap to check first.
 
 | Number | Fixed now | Set from reference runs by this rule |
 |---|---|---|
-| F (steps factor) | **2** | **PROPOSED:** F = max(2, q), where q is the 95th percentile of the median-steps ratio between two bootstrap-resampled 10-seed groups of the reference itself. This stops the reference failing its own criterion. |
+| F (steps factor) | **2** | F = max(2, q), where q is the 95th percentile of the median-steps ratio between two bootstrap-resampled 10-seed groups of the reference itself. This stops the reference failing its own criterion. |
 | T (threshold) | 475 by default | If fewer than 8 of 10 reference seeds reach 475, T = the highest multiple of 25 that ≥ 8 of 10 reference seeds reach. |
 | *k* (L3 seed count) | — | The number of reference seeds reaching T, minus 2. |
-| δ (final-return margin) | — | **PROPOSED:** the 95th percentile of IQM(A) − IQM(B), where A and B are bootstrap-resampled 10-seed groups of the reference. A correct implementation then passes about 95% of the time. |
+| δ (final-return margin) | — | The 95th percentile of IQM(A) − IQM(B), where A and B are bootstrap-resampled 10-seed groups of the reference. A correct implementation then passes about 95% of the time. |
 
 The calibrated values are appended to this entry with their date **before** any
 full NumPy-DQN CartPole run. Short smoke runs during development do not count as
