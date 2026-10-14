@@ -1,0 +1,16 @@
+# Development and validation only.  Never needed to train or run the agent.
+# The `dqn` package must not import anything below (D028, D029); a test checks.
+-r requirements.txt
+
+# Gate 1a benchmark (D029).  Pinned to the version CleanRL pins, so CartPole-v1
+# behaves identically for the reference and for our DQN.
+gymnasium==0.29.1
+
+# Gate 1a reference implementation: CleanRL cleanrl/dqn.py at commit
+# fe8d8a03c41a7ef5b523e2e354bd01c363e786bb, run unmodified.  CleanRL pins
+# torch==2.4.1; record the version actually used in the run's meta.json.
+# Also the L1 oracle for the Adam optimiser (compare against torch.optim.Adam).
+torch>=2.4
+# Imported by cleanrl/dqn.py itself.
+tyro
+tensorboard

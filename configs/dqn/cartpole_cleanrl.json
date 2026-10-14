@@ -1,0 +1,22 @@
+{
+  "env_id": "CartPole-v1",
+  "total_timesteps": 500000,
+  "learning_starts": 10000,
+  "train_frequency": 10,
+  "gamma": 0.99,
+  "target_network_frequency": 500,
+  "loss": "mse",
+  "buffer_size": 10000,
+  "batch_size": 128,
+  "hidden_sizes": [120, 84],
+  "init_scheme": "torch_default",
+  "dtype": "float64",
+  "learning_rate": 0.00025,
+  "adam_beta1": 0.9,
+  "adam_beta2": 0.999,
+  "adam_eps": 1e-08,
+  "start_e": 1.0,
+  "end_e": 0.05,
+  "exploration_fraction": 0.5,
+  "update_log_frequency": 100
+}

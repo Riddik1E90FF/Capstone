@@ -288,11 +288,16 @@ Read before doing anything substantive:
 - The combat environment (`combat_env/`), deterministic, tested, 25 difficulty
   configurations, axes calibrated.
 - `scripts/` - human play and session recording, difficulty sweep, benchmarks.
-- `tests/` - 7 tests, determinism is the load-bearing one.
+- `tests/` - determinism of the env is the load-bearing test.
+- `dqn/` scaffold (build step 0): config with CleanRL-matched defaults,
+  seeding, run logging, gradient checker, import-boundary tests,
+  `scripts/train_dqn.py` CLI. Build order, ownership and checkpoint structure
+  in `dqn/README.md`. Gate 1a criteria in `docs/DECISIONS.md` D029.
 
 ### What does not exist yet
 
-- The DQN. From scratch in NumPy. Not started.
+- The DQN components themselves (steps 1-7, written by the user). Next: step 1,
+  the MLP.
 - The curriculum sampler.
 - The EEG pipeline.
 
