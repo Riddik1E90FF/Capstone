@@ -293,11 +293,12 @@ Read before doing anything substantive:
   seeding, run logging, gradient checker, import-boundary tests,
   `scripts/train_dqn.py` CLI. Build order, ownership and checkpoint structure
   in `dqn/README.md`. Gate 1a criteria in `docs/DECISIONS.md` D029.
+- DQN step 1, `dqn/network.py` (MLP, hand-written backward), and step 2,
+  `dqn/td.py` (TD target and loss gradient), both passing their L1 tests.
 
 ### What does not exist yet
 
-- The DQN components themselves (steps 1-7, written by the user). Next: step 1,
-  the MLP.
+- DQN steps 3-7 (core written by the user). Next: step 3, Adam.
 - The curriculum sampler.
 - The EEG pipeline.
 
@@ -308,9 +309,14 @@ Two parallel tracks:
 - **Main:** nothing blocking - the environment is built.
 - **Parallel:** implement the from-scratch DQN and validate it on a benchmark
   task **before** it touches the combat environment (Gate 1a). An algorithm
-  defect would degrade all seven experimental conditions equally and inflate
-  seed variance rather than failing visibly, so correctness has to be
-  demonstrated separately.
+  defect would affect all seven experimental conditions, but not necessarily
+  equally: defects can interact with curriculum ordering and difficulty (e.g.
+  a bug that worsens forgetting hurts non-stationary orderings more than a
+  static one; a timeout-masking bug hurts most where timeouts are common).
+  So a defect can create, hide, or reverse between-condition differences, not
+  only inflate seed variance, and it does so without failing visibly.
+  Correctness therefore has to be demonstrated separately. Carry this
+  reasoning into the final report.
 
 ### Hard constraints from the pre-registration
 
@@ -333,7 +339,8 @@ finished system. Default to teaching, not delivering.
 
 ### Who writes what
 
-**The user writes** anything where the understanding is the point:
+**The user writes** the lines that *are* the algorithm, where the
+understanding is the point:
 
 - the DQN itself — replay buffer, Bellman target, backward pass, target network
   sync, exploration schedule
@@ -346,6 +353,13 @@ finished system. Default to teaching, not delivering.
 - test harnesses, fixtures, logging, config plumbing, argparse
 - plotting and reporting
 - repetitive boilerplate the user has already demonstrated they understand
+- input validation (shape, dtype, range checks and their error messages)
+  inside the user's components, from step 2 onward (agreed 2026-10-17)
+
+Within a user-owned component, the split is by line, not by file: the user
+writes the core computation, you write the guards around it. Before a piece
+of yours goes in, the user should be able to explain what it does and why;
+offer that check rather than skipping it.
 
 When unsure which category something falls in, ask.
 

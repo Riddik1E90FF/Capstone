@@ -14,7 +14,7 @@ agreed interface spec, before the implementation exists.
 | 0 | Config, seeding, run logging, gradient checker, import boundary | `config.py`, `seeding.py`, `runlog.py`, `gradcheck.py` | Claude | — |
 | 0 | CLI and env factory | `scripts/train_dqn.py` | Claude | — |
 | 1 | MLP forward, analytic backward, init | `network.py` (`tests/test_network.py`) | **user** | finite differences (`gradcheck.py`) |
-| 2 | TD target and loss gradient w.r.t. Q | — | **user** | hand-computed cases incl. terminated vs truncated |
+| 2 | TD target and loss gradient w.r.t. Q | `td.py` (`tests/test_td.py`) | **user** | hand-computed cases incl. terminated vs truncated |
 | 3 | Adam | — | **user** | `torch.optim.Adam` on identical gradients (dev-only) |
 | 4 | Target network and hard sync | — | **user** | equal after sync, not aliased, unchanged between syncs |
 | 5 | Replay buffer | — | **user** | wraparound, capacity, sampling bounds, copy-not-reference |
@@ -25,6 +25,26 @@ agreed interface spec, before the implementation exists.
 | 9 | Gate 1a runs | — | together | D029 |
 
 File names for 1–6 are settled in each component's interface spec.
+
+## Terminated vs truncated: where each is handled
+
+Only `terminated` masks the bootstrap (D029). A truncated transition gets the
+ordinary bootstrap, so `td.td_target` takes no `truncated` argument: the bug
+"mask on terminated or truncated" cannot be written there. Truncation is
+handled upstream instead:
+
+- **Step 5, replay buffer:** store only the `terminated` flag, in a field
+  named `terminated`, not `done`. A line like `done=terminated or truncated`
+  then reads as wrong in review. Timeouts are still recorded per episode in
+  `episodes.jsonl`, so no diagnostics are lost.
+- **Step 7a, training loop:** (1) end the episode, reset the env and close
+  out episode logging on `terminated or truncated`. This is the only place
+  the two flags are combined. (2) On a truncated step, store the real final
+  observation returned by `step()` as `s'`, captured before `reset()`, never
+  the post-reset observation.
+
+L1 tests cannot see either of these. They are checked by L2: its MDP contains
+both a terminal transition and a truncation.
 
 ## Run directory
 
