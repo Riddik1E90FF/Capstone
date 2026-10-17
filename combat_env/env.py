@@ -297,7 +297,7 @@ class CombatEnv:
     @property
     def invulnerable(self) -> bool:
         """True while dodge i-frames are active. Public, for display."""
-        return self.tick <= self.iframe_until_tick
+        return self._invulnerable
 
     @property
     def attack_cooldown_fraction(self) -> float:
