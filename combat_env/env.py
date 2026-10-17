@@ -293,6 +293,22 @@ class CombatEnv:
     @property
     def _invulnerable(self) -> bool:
         return self.tick <= self.iframe_until_tick
+    
+    @property
+    def invulnerable(self) -> bool:
+        """True while dodge i-frames are active. Public, for display."""
+        return self.tick <= self.iframe_until_tick
+
+    @property
+    def attack_cooldown_fraction(self) -> float:
+        """0.0 when ready, 1.0 just after attacking. For display only."""
+        return min(1.0, max(0, self.attack_ready_tick - self.tick) / self._attack_cooldown_ticks)
+    
+    @property
+    def dodge_cooldown_fraction(self) -> float:
+        """1.0 just after dodging, decaying to 0.0 when ready. Display only."""
+        remaining = max(0, self.dodge_ready_tick - self.tick)
+        return min(1.0, remaining / self._dodge_cooldown_ticks)
 
     def _apply_agent_action(self, action: Action) -> None:
         """Start moves, dodges and attacks.  Never produces reward directly."""

@@ -301,7 +301,7 @@ def draw(pygame, screen, env, fx: Feedback, fonts: dict, label: str) -> None:
         screen.blit(surf, (enemy_xy[0] - surf.get_width() // 2,
                            enemy_xy[1] + ENEMY_RADIUS_PX + 10))
 
-    agent_color = C_DODGE if env._invulnerable else (
+    agent_color = C_DODGE if env.invulnerable else (
         C_BLOCK if env.is_blocking else (235, 235, 245))
     pygame.draw.circle(screen, agent_color, agent_xy, AGENT_RADIUS_PX)
 
@@ -309,8 +309,8 @@ def draw(pygame, screen, env, fx: Feedback, fonts: dict, label: str) -> None:
     # Same normalisation as observation dims 6 and 7.  Near the body: an arc
     # fills while cooling and disappears when ready; an orange ring means the
     # cooldown is done but stamina is below the action's cost.
-    atk_cd = min(1.0, max(0, env.attack_ready_tick - t) / env._attack_cd_t)
-    dodge_cd = min(1.0, max(0, env.dodge_ready_tick - t) / env._dodge_cd_t)
+    atk_cd = env.attack_cooldown_fraction
+    dodge_cd = env.dodge_cooldown_fraction
     atk_stamina_ok = env.agent_stamina >= p.agent_attack_stamina
     dodge_stamina_ok = env.agent_stamina >= p.dodge_stamina
     atk_ready = atk_cd == 0 and env.attack_resolve_tick < 0 and atk_stamina_ok
