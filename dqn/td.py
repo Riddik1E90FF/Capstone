@@ -1,3 +1,5 @@
+"""Build step 2: Temporal Difference."""
+
 import numpy as np
 
 

@@ -294,13 +294,14 @@ Read before doing anything substantive:
   `scripts/train_dqn.py` CLI. Build order, ownership and checkpoint structure
   in `dqn/README.md`. Gate 1a criteria in `docs/DECISIONS.md` D029.
 - DQN step 1, `dqn/network.py` (MLP, hand-written backward), step 2,
-  `dqn/td.py` (TD target and loss gradient), and step 3, `dqn/adam.py`
-  (Adam, matched to `torch.optim.Adam`), all passing their L1 tests.
+  `dqn/td.py` (TD target and loss gradient), step 3, `dqn/adam.py`
+  (Adam, matched to `torch.optim.Adam`), and step 4, `dqn/target.py`
+  (`make_target`, in-place `hard_sync`, CleanRL-matched `sync_due`), all
+  passing their L1 tests.
 
 ### What does not exist yet
 
-- DQN steps 4-7 (core written by the user). Next: step 4, target network
-  and hard sync.
+- DQN steps 5-7 (core written by the user). Next: step 5, replay buffer.
 - The curriculum sampler.
 - The EEG pipeline.
 
