@@ -15,7 +15,7 @@ agreed interface spec, before the implementation exists.
 | 0 | CLI and env factory | `scripts/train_dqn.py` | Claude | — |
 | 1 | MLP forward, analytic backward, init | `network.py` (`tests/test_network.py`) | **user** | finite differences (`gradcheck.py`) |
 | 2 | TD target and loss gradient w.r.t. Q | `td.py` (`tests/test_td.py`) | **user** | hand-computed cases incl. terminated vs truncated |
-| 3 | Adam | — | **user** | `torch.optim.Adam` on identical gradients (dev-only) |
+| 3 | Adam | `adam.py` (`tests/test_adam.py`) | **user** | `torch.optim.Adam` on identical gradients (dev-only) |
 | 4 | Target network and hard sync | — | **user** | equal after sync, not aliased, unchanged between syncs |
 | 5 | Replay buffer | — | **user** | wraparound, capacity, sampling bounds, copy-not-reference |
 | 6 | ε schedule and ε-greedy | — | **user** | endpoints, clamping, empirical random-action rate |

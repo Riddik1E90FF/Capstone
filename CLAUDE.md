@@ -293,12 +293,14 @@ Read before doing anything substantive:
   seeding, run logging, gradient checker, import-boundary tests,
   `scripts/train_dqn.py` CLI. Build order, ownership and checkpoint structure
   in `dqn/README.md`. Gate 1a criteria in `docs/DECISIONS.md` D029.
-- DQN step 1, `dqn/network.py` (MLP, hand-written backward), and step 2,
-  `dqn/td.py` (TD target and loss gradient), both passing their L1 tests.
+- DQN step 1, `dqn/network.py` (MLP, hand-written backward), step 2,
+  `dqn/td.py` (TD target and loss gradient), and step 3, `dqn/adam.py`
+  (Adam, matched to `torch.optim.Adam`), all passing their L1 tests.
 
 ### What does not exist yet
 
-- DQN steps 3-7 (core written by the user). Next: step 3, Adam.
+- DQN steps 4-7 (core written by the user). Next: step 4, target network
+  and hard sync.
 - The curriculum sampler.
 - The EEG pipeline.
 
