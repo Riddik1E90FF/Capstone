@@ -302,11 +302,14 @@ Read before doing anything substantive:
   `dqn/exploration.py` (pure `linear_epsilon` in env steps, `greedy_action`
   with lowest-index ties, `epsilon_greedy` with a fixed draw pattern on the
   `"exploration"` stream), all passing their L1 tests.
+- DQN step 7a, `dqn/train.py`: `gradient_update` (user) and the `train`
+  loop (written by Claude at the user's request, 2026-10-20), passing the
+  stub-env tests in `tests/test_train.py`. Not yet validated by L2.
 
 ### What does not exist yet
 
-- DQN step 7 (core written by the user). Next: step 7a, the training loop,
-  and its L2 chain-MDP test.
+- The L2 chain-MDP test for step 7a (next), then step 7b (checkpointing and
+  greedy eval runner).
 - The curriculum sampler.
 - The EEG pipeline.
 

@@ -2,8 +2,8 @@
 
 This file is the *plumbing* around the training loop: config resolution, the
 environment factory, and the run directory.  The loop itself (build step 7a)
-lives in `dqn/train.py`, which does not exist yet.  Until it does, use
-`--dry-run` to check what a run would use.
+lives in `dqn/train.py`.  Use `--dry-run` to check what a run would use
+without training.
 
 Config resolution, later steps winning:
 
@@ -138,16 +138,14 @@ def main(argv: list[str] | None = None) -> int:
         print(f"run dir (not created): {run_dir}")
         return 0
 
-    try:
-        from dqn.train import train
-    except ImportError as exc:
-        raise SystemExit(f"dqn.train is not available yet (build step 7a): {exc}")
+    # Imported here so --dry-run works even if the loop is broken.
+    from dqn.train import train
 
     with RunLogger(run_dir, cfg, extra_meta={"obs_dim": obs_dim, "n_actions": n_actions}) as logger:
         print(f"run dir: {run_dir}")
-        # PROVISIONAL call site.  The real signature is fixed in the step-7a
-        # interface spec; update this line to match it then.
-        train(cfg, env_fn=env_fn, obs_dim=obs_dim, n_actions=n_actions, logger=logger)
+        result = train(cfg, env_fn=env_fn, obs_dim=obs_dim, n_actions=n_actions, logger=logger)
+        print(f"done: {result.global_steps} env steps, {result.episodes} episodes, "
+              f"{result.updates} updates")
     return 0
 
 
