@@ -462,6 +462,24 @@ criterion and is cheap to check first.
 | *k* (L3 seed count) | — | The number of reference seeds reaching T, minus 2. |
 | δ (final-return margin) | — | The 95th percentile of IQM(A) − IQM(B), where A and B are bootstrap-resampled 10-seed groups of the reference. A correct implementation then passes about 95% of the time. |
 
+**Metric definitions** (CONFIRMED 2026-10-20 by the user, before any
+reference result was looked at; the 10 reference runs were in progress):
+
+1. **100-episode moving average:** the mean return of the latest 100 training
+   episodes, first defined at the 100th episode, with no partial windows. A
+   seed *reaches* T if this average is ≥ T at some episode. Steps-to-threshold
+   is the `global_step` of the first such episode.
+2. **IQM:** the mean of the middle 50% of the 10 per-seed values. Drop the 2
+   lowest and the 2 highest, then average the remaining 6. This is
+   `scipy.stats.trim_mean(x, 0.25)`, the rliable convention.
+3. **Bootstrap:** 10,000 resamples, with replacement, NumPy
+   `default_rng(0)`, and NumPy's default (linear) percentile.
+4. **Censoring:** a seed that never reaches T counts as `total_timesteps`
+   (500,000) inside the bootstrap median-steps ratios.
+
+**Ownership:** the user writes the calibration and the L3/L4 check, including
+their plumbing. Claude writes their tests.
+
 The calibrated values are appended to this entry with their date **before** any
 full NumPy-DQN CartPole run. Short smoke runs during development do not count as
 outcome data for this gate, but their results must not be used to set any number

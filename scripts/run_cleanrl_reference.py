@@ -33,6 +33,14 @@ Usage:
 
 from __future__ import annotations
 
+# Make this script runnable from any directory: put the repo root (this
+# file's parent's parent) on sys.path so `combat_env` and `dqn` import
+# without PYTHONPATH.  Resolved from __file__, so a git worktree imports
+# its own copy rather than another checkout's.
+import sys as _sys
+from pathlib import Path as _Path
+_sys.path.insert(0, str(_Path(__file__).resolve().parent.parent))
+
 import argparse
 import hashlib
 import os

@@ -6,11 +6,18 @@ Two things are timed separately, because they differ by an order of magnitude:
   2. A NumPy DQN's per-step cost: action selection plus one gradient step on a
      replay minibatch. This is what actually dominates a training run.
 """
+
+# Make this script runnable from any directory: put the repo root (this
+# file's parent's parent) on sys.path so `combat_env` and `dqn` import
+# without PYTHONPATH.  Resolved from __file__, so a git worktree imports
+# its own copy rather than another checkout's.
+import sys as _sys
+from pathlib import Path as _Path
+_sys.path.insert(0, str(_Path(__file__).resolve().parent.parent))
 import time
 import numpy as np
 
 import sys
-sys.path.insert(0, "/home/claude/repo")
 from combat_env import N_ACTIONS, make_env
 
 # ---------------------------------------------------------------- env only
