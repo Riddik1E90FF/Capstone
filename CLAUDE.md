@@ -295,13 +295,16 @@ Read before doing anything substantive:
   in `dqn/README.md`. Gate 1a criteria in `docs/DECISIONS.md` D029.
 - DQN step 1, `dqn/network.py` (MLP, hand-written backward), step 2,
   `dqn/td.py` (TD target and loss gradient), step 3, `dqn/adam.py`
-  (Adam, matched to `torch.optim.Adam`), and step 4, `dqn/target.py`
-  (`make_target`, in-place `hard_sync`, CleanRL-matched `sync_due`), all
-  passing their L1 tests.
+  (Adam, matched to `torch.optim.Adam`), step 4, `dqn/target.py`
+  (`make_target`, in-place `hard_sync`, CleanRL-matched `sync_due`), and
+  step 5, `dqn/replay.py` (circular buffer storing `terminated` only,
+  uniform sampling with replacement from filled slots), all passing their
+  L1 tests.
 
 ### What does not exist yet
 
-- DQN steps 5-7 (core written by the user). Next: step 5, replay buffer.
+- DQN steps 6-7 (core written by the user). Next: step 6, ε schedule and
+  ε-greedy.
 - The curriculum sampler.
 - The EEG pipeline.
 

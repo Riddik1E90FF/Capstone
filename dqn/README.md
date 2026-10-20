@@ -17,7 +17,7 @@ agreed interface spec, before the implementation exists.
 | 2 | TD target and loss gradient w.r.t. Q | `td.py` (`tests/test_td.py`) | **user** | hand-computed cases incl. terminated vs truncated |
 | 3 | Adam | `adam.py` (`tests/test_adam.py`) | **user** | `torch.optim.Adam` on identical gradients (dev-only) |
 | 4 | Target network, hard sync, sync schedule | `target.py` (`tests/test_target.py`) | **user** | equal after sync, not aliased, unchanged between syncs |
-| 5 | Replay buffer | — | **user** | wraparound, capacity, sampling bounds, copy-not-reference |
+| 5 | Replay buffer | `replay.py` (`tests/test_replay.py`) | **user** | wraparound, capacity, sampling bounds, copy-not-reference |
 | 6 | ε schedule and ε-greedy | — | **user** | endpoints, clamping, empirical random-action rate |
 | 7a | Training loop | `train.py` | **user** | L2: chain MDP with hand-derived Q\* |
 | 7b | Checkpointing (structure below) and greedy eval runner | — | **user** | round-trip test; eval seeds distinct from training seeds |
