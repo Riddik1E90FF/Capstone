@@ -1,0 +1,3 @@
+# Vendored reference code must stay byte-identical to upstream (D029,
+# third_party/cleanrl/README.md).  No line-ending conversion.
+third_party/cleanrl/** -text
