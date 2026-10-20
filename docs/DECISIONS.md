@@ -473,6 +473,15 @@ Every Gate 1a attempt is logged with its date, commit, levels run and result,
 including failures. Fixing a defect and re-running is the intended use of the
 gate. Re-running unchanged code with new seeds until it passes is not.
 
+| Date | Code commit | Level | Result |
+|---|---|---|---|
+| 2026-10-20 | `531f33d` | L1 | PASS. All component tests (steps 1–6, and step 7a's `gradient_update` against the same calls made by hand). Loop composition against a stub env: `tests/test_train.py`, 34 tests. |
+| 2026-10-20 | `531f33d` | L2 | PASS, first run. `tests/test_l2_chain.py`: 3-state quit chain with a terminal action and a 4-step truncation, γ = 0.9. Q\* derived by hand by the user (S: 8.1 / 1, A: 9 / 0, B: 10 / 0), cross-checked by value iteration. Tolerance ±0.5 and config fixed before the first run. Seeds 1, 2, 3: max \|Q − Q\*\| = 0.001, 0.003, 0.001. Before this run, planted bugs in a scratch copy each failed by ≥ 4.5: masking on truncation, never storing `terminated`, storing the reset observation as s′, never syncing, wrong γ. |
+
+Development smoke runs (not attempts, and not used for any calibration
+number): 2026-10-20, 50k-step CartPole-v1 and 20k-step `combat:12` runs to
+check that the CLI path executes end to end.
+
 ---
 
 ## D030 — Remove `block_move_scale` from `EnvParams`

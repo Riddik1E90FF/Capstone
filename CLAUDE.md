@@ -304,12 +304,13 @@ Read before doing anything substantive:
   `"exploration"` stream), all passing their L1 tests.
 - DQN step 7a, `dqn/train.py`: `gradient_update` (user) and the `train`
   loop (written by Claude at the user's request, 2026-10-20), passing the
-  stub-env tests in `tests/test_train.py`. Not yet validated by L2.
+  stub-env tests in `tests/test_train.py`. Gate 1a L1 and L2 passed
+  2026-10-20 (`tests/test_l2_chain.py`; attempt log in D029).
 
 ### What does not exist yet
 
-- The L2 chain-MDP test for step 7a (next), then step 7b (checkpointing and
-  greedy eval runner).
+- Step 7b (checkpointing and greedy eval runner), step 8 (CleanRL reference
+  runner and log conversion), then Gate 1a L3/L4 calibration and runs.
 - The curriculum sampler.
 - The EEG pipeline.
 
