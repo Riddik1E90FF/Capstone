@@ -18,7 +18,7 @@ agreed interface spec, before the implementation exists.
 | 3 | Adam | `adam.py` (`tests/test_adam.py`) | **user** | `torch.optim.Adam` on identical gradients (dev-only) |
 | 4 | Target network, hard sync, sync schedule | `target.py` (`tests/test_target.py`) | **user** | equal after sync, not aliased, unchanged between syncs |
 | 5 | Replay buffer | `replay.py` (`tests/test_replay.py`) | **user** | wraparound, capacity, sampling bounds, copy-not-reference |
-| 6 | ε schedule and ε-greedy | — | **user** | endpoints, clamping, empirical random-action rate |
+| 6 | ε schedule and ε-greedy | `exploration.py` (`tests/test_exploration.py`) | **user** | endpoints, clamping, draw accounting vs a reference rng, empirical action frequencies |
 | 7a | Training loop | `train.py` | **user** | L2: chain MDP with hand-derived Q\* |
 | 7b | Checkpointing (structure below) and greedy eval runner | — | **user** | round-trip test; eval seeds distinct from training seeds |
 | 8 | CleanRL reference runner, log conversion, comparison plots | `scripts/` | Claude | — |
@@ -45,6 +45,23 @@ handled upstream instead:
 
 L1 tests cannot see either of these. They are checked by L2: its MDP contains
 both a terminal transition and a truncation.
+
+## Exploration: what the caller must get right
+
+`exploration.py` is pure and its L1 tests pin its draw pattern (one uniform
+per `epsilon_greedy` call, plus one integer on the random branch; greedy ties
+to the lowest index, as `torch.argmax` in CleanRL). Two rules live in the
+callers, where L1 cannot see them:
+
+- **Step 7a, training loop:** ε is `linear_epsilon(global_step, ...)`, the
+  0-based env step counted from step 0. It is not the update count, and the
+  anneal does not start at `learning_starts`. With the CleanRL defaults, using
+  the update count leaves ε at about 0.81 at the end of training instead of 0.05.
+- **Step 7b, eval runner:** evaluation never calls `epsilon_greedy` with the
+  training `"exploration"` rng. `rng.random() < 0.0` still consumes a draw, so
+  enabling evaluation would change every later training action. With
+  `eval_epsilon == 0`, call `greedy_action` directly. If `eval_epsilon > 0` is
+  ever needed, add an `"eval_exploration"` stream to `seeding.STREAMS`.
 
 ## Run directory
 

@@ -296,15 +296,17 @@ Read before doing anything substantive:
 - DQN step 1, `dqn/network.py` (MLP, hand-written backward), step 2,
   `dqn/td.py` (TD target and loss gradient), step 3, `dqn/adam.py`
   (Adam, matched to `torch.optim.Adam`), step 4, `dqn/target.py`
-  (`make_target`, in-place `hard_sync`, CleanRL-matched `sync_due`), and
+  (`make_target`, in-place `hard_sync`, CleanRL-matched `sync_due`),
   step 5, `dqn/replay.py` (circular buffer storing `terminated` only,
-  uniform sampling with replacement from filled slots), all passing their
-  L1 tests.
+  uniform sampling with replacement from filled slots), and step 6,
+  `dqn/exploration.py` (pure `linear_epsilon` in env steps, `greedy_action`
+  with lowest-index ties, `epsilon_greedy` with a fixed draw pattern on the
+  `"exploration"` stream), all passing their L1 tests.
 
 ### What does not exist yet
 
-- DQN steps 6-7 (core written by the user). Next: step 6, ε schedule and
-  ε-greedy.
+- DQN step 7 (core written by the user). Next: step 7a, the training loop,
+  and its L2 chain-MDP test.
 - The curriculum sampler.
 - The EEG pipeline.
 
