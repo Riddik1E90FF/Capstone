@@ -306,11 +306,14 @@ Read before doing anything substantive:
   loop (written by Claude at the user's request, 2026-10-20), passing the
   stub-env tests in `tests/test_train.py`. Gate 1a L1 and L2 passed
   2026-10-20 (`tests/test_l2_chain.py`; attempt log in D029).
+- DQN step 7b: `dqn/evaluate.py` (greedy evaluator, user) and
+  `dqn/checkpoint.py` plus the eval/checkpoint wiring in `train` (Claude).
+  Evaluation on/off leaves training byte-identical (tested).
 
 ### What does not exist yet
 
-- Step 7b (checkpointing and greedy eval runner), step 8 (CleanRL reference
-  runner and log conversion), then Gate 1a L3/L4 calibration and runs.
+- Step 8 (CleanRL reference runner, log conversion, comparison plots), then
+  Gate 1a L3/L4 calibration from reference runs and the NumPy-DQN runs.
 - The curriculum sampler.
 - The EEG pipeline.
 

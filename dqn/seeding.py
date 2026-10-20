@@ -61,3 +61,14 @@ def stream_seed(master_seed: int, name: str) -> int:
     """A plain non-negative int for APIs that want an integer seed, such as
     ``env.reset(seed=...)``.  Stable across processes and platforms."""
     return int(_seed_sequence(master_seed, name).generate_state(1, dtype=np.uint32)[0])
+
+
+def stream_seeds(master_seed: int, name: str, n: int) -> list[int]:
+    """`n` plain int seeds from stream `name`, e.g. one per evaluation episode.
+
+    The first equals `stream_seed(master_seed, name)`, and the list for a
+    given n is a prefix of the list for any larger n, so adding evaluation
+    episodes never changes the existing ones."""
+    if n < 1:
+        raise ValueError(f"n must be >= 1, got {n}")
+    return [int(s) for s in _seed_sequence(master_seed, name).generate_state(n, dtype=np.uint32)]

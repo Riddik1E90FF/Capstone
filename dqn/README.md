@@ -20,7 +20,8 @@ agreed interface spec, before the implementation exists.
 | 5 | Replay buffer | `replay.py` (`tests/test_replay.py`) | **user** | wraparound, capacity, sampling bounds, copy-not-reference |
 | 6 | ε schedule and ε-greedy | `exploration.py` (`tests/test_exploration.py`) | **user** | endpoints, clamping, draw accounting vs a reference rng, empirical action frequencies |
 | 7a | Training loop | `train.py` | **user** | L2: chain MDP with hand-derived Q\* |
-| 7b | Checkpointing (structure below) and greedy eval runner | — | **user** | round-trip test; eval seeds distinct from training seeds |
+| 7b | Greedy eval runner | `evaluate.py` (`tests/test_evaluate.py`) | **user** | recording stub env: greedy actions, seeded resets, undiscounted returns; eval on/off gives byte-identical training logs |
+| 7b | Checkpointing (structure below), wiring of eval and checkpoints into `train` | `checkpoint.py` (`tests/test_checkpoint.py`) | Claude (agreed 2026-10-20) | round-trip test; hash, shape, `.tmp` and pickle checks |
 | 8 | CleanRL reference runner, log conversion, comparison plots | `scripts/` | Claude | — |
 | 9 | Gate 1a runs | — | together | D029 |
 
@@ -106,6 +107,7 @@ checkpoints/
     "updates": 49000,
     "obs_dim": 4,
     "n_actions": 2,
+    "dtype": "float64",
     "param_shapes": {"W0": [4, 120], "b0": [120], "...": "..."},
     "params_sha256": "...",
     "config": { "...the full DQNConfig dict..." }

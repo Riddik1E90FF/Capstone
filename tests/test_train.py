@@ -562,3 +562,91 @@ def test_network_built_from_network_init_stream(tmp_path, monkeypatch):
                 dtype=np.dtype(cfg.dtype))
     for k in fresh.params:
         np.testing.assert_array_equal(r.result.online.params[k], fresh.params[k], err_msg=k)
+
+
+# ======================================================================
+# Part 3: evaluation and checkpoints wired into train (step 7b)
+#
+# The evaluation tests need dqn/evaluate.py implemented; the checkpoint
+# tests do not.
+# ======================================================================
+
+def _ckpt_steps(run):
+    from dqn.checkpoint import _DIR_RE
+    d = run.run_dir / "checkpoints"
+    return sorted(int(_DIR_RE.match(p.name).group(1)) for p in d.iterdir()
+                  if _DIR_RE.match(p.name))
+
+
+def test_final_checkpoint_always_written_and_matches_result(run):
+    from dqn.checkpoint import latest_checkpoint, load_checkpoint
+    assert _ckpt_steps(run) == [run.cfg.total_timesteps]
+    net, meta = load_checkpoint(latest_checkpoint(run.run_dir / "checkpoints"))
+    for k in net.params:
+        np.testing.assert_array_equal(net.params[k], run.result.online.params[k], err_msg=k)
+    assert meta["episode"] == run.result.episodes
+    assert meta["updates"] == run.result.updates
+    assert meta["config"] == run.cfg.to_dict()
+
+
+@pytest.mark.parametrize("total, freq, expected", [
+    (600, 250, [250, 500, 600]),     # final added because 600 is not a multiple
+    (500, 250, [250, 500]),          # final coincides with a periodic one: no duplicate
+])
+def test_periodic_checkpoints(tmp_path, monkeypatch, total, freq, expected):
+    r = Run(_cfg(total_timesteps=total, checkpoint_frequency=freq), tmp_path / "r", monkeypatch)
+    assert _ckpt_steps(r) == expected
+
+
+def test_checkpoints_do_not_change_training(tmp_path, monkeypatch):
+    off = Run(_cfg(), tmp_path / "off", monkeypatch)
+    on = Run(_cfg(checkpoint_frequency=100), tmp_path / "on", monkeypatch)
+    for name in ("episodes.jsonl", "updates.jsonl"):
+        assert (off.run_dir / name).read_bytes() == (on.run_dir / name).read_bytes(), name
+
+
+EVAL = dict(eval_frequency=200, eval_episodes=3)
+
+
+def test_eval_records_on_schedule(tmp_path, monkeypatch):
+    r = Run(_cfg(**EVAL), tmp_path / "r", monkeypatch)
+    evals = read_jsonl(r.run_dir / "evals.jsonl")
+    assert [e["global_step"] for e in evals] == [200, 400, 600]
+    for e in evals:
+        assert len(e["returns"]) == 3
+        assert e["mean_return"] == pytest.approx(float(np.mean(e["returns"])), abs=1e-12)
+
+
+def test_eval_does_not_change_training(tmp_path, monkeypatch):
+    # The central 7b property: evaluating must not touch the training env,
+    # the exploration or replay streams, the networks or the buffer.
+    off = Run(_cfg(), tmp_path / "off", monkeypatch)
+    on = Run(_cfg(**EVAL), tmp_path / "on", monkeypatch)
+    for name in ("episodes.jsonl", "updates.jsonl"):
+        assert (off.run_dir / name).read_bytes() == (on.run_dir / name).read_bytes(), name
+    for k in off.result.online.params:
+        np.testing.assert_array_equal(off.result.online.params[k], on.result.online.params[k],
+                                      err_msg=k)
+
+
+def test_eval_uses_eval_env_seeds_every_time(tmp_path, monkeypatch):
+    from dqn.seeding import stream_seeds
+    r = Run(_cfg(**EVAL), tmp_path / "r", monkeypatch)
+    seeded = [e[1] for e in r.events if e[0] == "reset" and e[1] is not None]
+    expected = stream_seeds(r.cfg.seed, "eval_env", 3)
+    assert seeded[0] == stream_seed(r.cfg.seed, "env")      # the training env's one seeded reset
+    assert seeded[1:] == expected * 3                        # three evaluations, same seeds
+    assert stream_seed(r.cfg.seed, "env") not in expected
+
+
+def test_eval_is_reproducible_from_the_final_checkpoint(tmp_path, monkeypatch):
+    # Greedy + seeded env + fixed seeds: re-evaluating the saved network
+    # reproduces the last in-training evaluation exactly.
+    from dqn.checkpoint import latest_checkpoint, load_checkpoint
+    from dqn.evaluate import evaluate
+    from dqn.seeding import stream_seeds
+    r = Run(_cfg(**EVAL), tmp_path / "r", monkeypatch)
+    last = read_jsonl(r.run_dir / "evals.jsonl")[-1]
+    net, _ = load_checkpoint(latest_checkpoint(r.run_dir / "checkpoints"))
+    again = evaluate(net, lambda s: StubEnv(s, []), stream_seeds(r.cfg.seed, "eval_env", 3))
+    assert again == last["returns"]

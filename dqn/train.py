@@ -5,12 +5,14 @@ from typing import Any, Callable, NamedTuple
 import numpy as np
 
 from dqn.adam import Adam
+from dqn.checkpoint import save_checkpoint
 from dqn.config import DQNConfig
+from dqn.evaluate import evaluate
 from dqn.exploration import epsilon_greedy, linear_epsilon
 from dqn.network import MLP
 from dqn.replay import Batch, ReplayBuffer
 from dqn.runlog import RunLogger
-from dqn.seeding import make_rng, stream_seed
+from dqn.seeding import make_rng, stream_seed, stream_seeds
 from dqn.target import hard_sync, make_target, sync_due
 from dqn.td import td_loss_and_grad, td_target
 
@@ -96,7 +98,17 @@ def train(cfg: DQNConfig, *, env_fn: Callable[[int | None], Any], obs_dim: int,
         completed, so it is one more than the 0-based count of the step being
         logged (runlog.py's definition).
 
-    Returns a TrainResult.  Evaluation and checkpointing are step 7b.
+    Evaluation and checkpoints (step 7b), both keyed to env steps completed:
+      * If cfg.eval_frequency > 0: every that many steps, a greedy evaluation
+        of the online net over cfg.eval_episodes episodes, logged with
+        log_eval.  The episode seeds come from the "eval_env" stream and are
+        the same list at every evaluation.
+      * If cfg.checkpoint_frequency > 0: a checkpoint every that many steps.
+        A final checkpoint at cfg.total_timesteps is always written.
+      * Neither may change training: a run with both on has byte-identical
+        episode and update logs to the same run with both off.
+
+    Returns a TrainResult.
     """
     # -- setup ---------------------------------------------------------
     explore_rng = make_rng(cfg.seed, "exploration")
@@ -115,6 +127,9 @@ def train(cfg: DQNConfig, *, env_fn: Callable[[int | None], Any], obs_dim: int,
 
     episode_return, episode_length = 0.0, 0
     episodes, updates = 0, 0
+
+    # Fixed list, so every evaluation plays the same episodes.
+    eval_seeds = stream_seeds(cfg.seed, "eval_env", cfg.eval_episodes)
 
     # -- loop: global_step is the 0-based env step, as in CleanRL --------
     for global_step in range(cfg.total_timesteps):
@@ -153,6 +168,23 @@ def train(cfg: DQNConfig, *, env_fn: Callable[[int | None], Any], obs_dim: int,
         if sync_due(global_step, learning_starts=cfg.learning_starts,
                     target_network_frequency=cfg.target_network_frequency):
             hard_sync(target, online)
+
+        # Evaluation gets its own envs from env_fn and draws no training
+        # randomness, so the training trajectory is unaffected.
+        steps_done = global_step + 1
+        if cfg.eval_frequency > 0 and steps_done % cfg.eval_frequency == 0:
+            returns = evaluate(online, env_fn, eval_seeds)
+            logger.log_eval(global_step=steps_done, mean_return=float(np.mean(returns)),
+                            returns=returns)
+        if cfg.checkpoint_frequency > 0 and steps_done % cfg.checkpoint_frequency == 0:
+            save_checkpoint(logger.checkpoint_dir, online, global_step=steps_done,
+                            episode=episodes, updates=updates, config=cfg)
+
+    final_saved = (cfg.checkpoint_frequency > 0
+                   and cfg.total_timesteps % cfg.checkpoint_frequency == 0)
+    if not final_saved:
+        save_checkpoint(logger.checkpoint_dir, online, global_step=cfg.total_timesteps,
+                        episode=episodes, updates=updates, config=cfg)
 
     return TrainResult(online=online, global_steps=cfg.total_timesteps,
                        episodes=episodes, updates=updates)
