@@ -309,6 +309,10 @@ Read before doing anything substantive:
 - DQN step 7b: `dqn/evaluate.py` (greedy evaluator, user) and
   `dqn/checkpoint.py` plus the eval/checkpoint wiring in `train` (Claude).
   Evaluation on/off leaves training byte-identical (tested).
+- `experiment/manifest.py` (Claude, 2026-10-22): per-run `manifest.json`
+  with condition, seed, config, whole-tree git commit/dirty state, Python and
+  package versions, start/end time and completed/crashed status. Stdlib only.
+  Not yet wired into any runner.
 
 ### What does not exist yet
 
