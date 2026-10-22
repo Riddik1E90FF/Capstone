@@ -171,5 +171,6 @@ def test_learned_q_matches_q_star(seed, tmp_path):
     err = np.abs(q - Q_STAR)
     table = "\n".join(f"  {name}: learned {q[i].round(3)}  Q* {Q_STAR[i]}"
                       for i, name in enumerate("SAB"))
+    print(f"\nseed {seed}: max |Q - Q*| = {err.max():.4f}\n{table}")
     assert err.max() <= TOLERANCE, (
         f"seed {seed}: max |Q - Q*| = {err.max():.3f} > {TOLERANCE}\n{table}")

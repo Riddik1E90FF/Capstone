@@ -120,3 +120,65 @@ def check_gate(numpy_runs: list[list[dict[str, Any]]],
       passed    all three
     plus the numbers each decision was made from, so the report can show them.
     """
+
+
+# ======================================================================
+# Plumbing: finding and loading runs, and the command line
+# ======================================================================
+#
+# Run folders are the ones written by dqn/runlog.py (our DQN) and by
+# scripts/run_cleanrl_reference.py (the reference).  Both contain
+# config.json, meta.json, summary.json and episodes.jsonl.
+
+from pathlib import Path  # noqa: E402
+
+SEEDS = tuple(range(1, 11))          # D029: seeds 1-10 for both implementations
+
+
+def find_runs(root: str | Path, seeds: Sequence[int] = SEEDS,
+              total_timesteps: int = TOTAL_TIMESTEPS) -> dict[int, Path]:
+    """Map each seed to its one run folder under `root`.
+
+    A folder counts if it is a direct child of `root` with a config.json
+    whose "seed" is one of `seeds` and whose "total_timesteps" equals
+    `total_timesteps` (so shortened smoke runs never count).  Raises
+    ValueError if any seed has no folder, or more than one: Gate 1a must
+    never silently use 9 seeds or pick between two runs of the same seed.
+    """
+
+
+def load_episodes(run_dir: str | Path) -> list[dict[str, Any]]:
+    """The episode records of one finished run, in episode order.
+
+    Raises ValueError unless the run's summary.json has status "completed":
+    a crashed or still-running run is not evidence.  Reading episodes.jsonl
+    can use dqn.runlog.read_jsonl.
+    """
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Command line.  Two subcommands:
+
+      calibrate --reference DIR --out FILE
+          Find and load the 10 reference runs, calibrate, print a per-seed
+          table (seed, reached, steps-to-T, max moving average, final
+          return) and the numbers T, k, q, F, delta, and write them as JSON
+          to FILE together with the run folders they came from.  Refuses to
+          overwrite an existing FILE: the numbers are set once (D029).
+
+      check --reference DIR --numpy DIR --calibration FILE
+          Load the calibration JSON and both sets of 10 runs, run
+          check_gate, and print a per-seed table for each implementation
+          and the L3 / L4_steps / L4_final / passed decisions with the
+          numbers behind them.
+
+    Returns the process exit code: 0 on success.  For `check`, a failed
+    gate is still a successful run of the script (exit 0); the decision is
+    in the output.
+    """
+
+
+if __name__ == "__main__":
+    import sys
+
+    sys.exit(main())
