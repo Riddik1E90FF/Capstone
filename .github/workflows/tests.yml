@@ -1,0 +1,44 @@
+# Runs the full pytest suite on every push and pull request.
+#
+# Python 3.12 matches the development machine (third_party/cleanrl/README.md).
+# requirements-dev.txt is installed, not just requirements.txt, so the
+# torch-backed Adam oracle tests and the CleanRL reference tests run instead
+# of being skipped (D029).  torch comes from the CPU-only wheel index: the
+# runner has no GPU and the default Linux wheel pulls in gigabytes of CUDA.
+name: tests
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install \
+            --extra-index-url https://download.pytorch.org/whl/cpu \
+            -r requirements-dev.txt
+
+      - name: Run tests
+        run: python -m pytest -rs
