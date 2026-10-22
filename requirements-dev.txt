@@ -14,3 +14,6 @@ torch>=2.4
 # Imported by cleanrl/dqn.py itself.
 tyro
 tensorboard
+
+# Property-based tests for combat_env (tests/test_env_properties.py).
+hypothesis>=6.100
