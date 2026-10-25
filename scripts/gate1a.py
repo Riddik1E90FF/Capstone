@@ -35,12 +35,20 @@ TOTAL_TIMESTEPS = 500_000
 
 def moving_average(returns: Sequence[float], window: int = WINDOW) -> np.ndarray:
     """Moving average over complete windows only.
-
+    
     Entry i is the mean of returns[i : i + window], so the array has
     len(returns) - window + 1 entries, and is empty when there are fewer than
     `window` returns.  Entry i belongs to episode i + window - 1, the newest
     episode in its window.
     """
+    if len(returns) < window:
+        return np.array([], dtype=float)
+    
+    averages = []
+    for i in range(len(returns) - window + 1):
+        averages.append(np.mean(returns[i : i + window]))
+        
+    return np.array(averages)
 
 
 def steps_to_threshold(episodes: list[dict[str, Any]], threshold: float,
@@ -51,10 +59,30 @@ def steps_to_threshold(episodes: list[dict[str, Any]], threshold: float,
     episode.  steps: the global_step of the first episode at which it is;
     if it never is, the run is censored and steps = total_timesteps.
     """
+    window = 100
+    # 1. Extract the return from each episode.
+    returns = [episode["return"] for episode in episodes]
+    
+    # 2. Calculate moving averages over complete 100-episode windows
+    averages = moving_average(returns, window=window)
+    
+    # 3. Find the FIRST moving average that reaches the threshold.
+    for i, average in enumerate(averages):
+        if average >= threshold:
+            # 4. Map this moving average to its newest episode.
+            episode_index = i + window - 1
+            
+            # 5. Return that episode's global training step.
+            steps = episodes[episode_index]["global_step"]
+            return int(steps), True
+    # 6. No window reached the threshold: the run is censored.
+    return total_timesteps, False
 
 
 def final_return(episodes: list[dict[str, Any]], window: int = WINDOW) -> float:
     """Mean return of the last `window` episodes of one run."""
+    returns = [episode["return"] for episode in episodes] 
+    return float(np.mean(returns[-window:]))
 
 
 def iqm(values: Sequence[float]) -> float:
@@ -64,6 +92,15 @@ def iqm(values: Sequence[float]) -> float:
     rest (scipy.stats.trim_mean(x, 0.25)).  For 10 values: drop 2 each end,
     average 6.
     """
+    sorted_values = sorted(values)
+    
+    n = len(sorted_values)
+    drop = n // 4
+    
+    # Remove 'drop' values from each end
+    middle = sorted_values[drop : n - drop]
+    # Average remaining values
+    return float(np.mean(middle))
 
 
 def choose_threshold(max_moving_averages: Sequence[float]) -> float:
@@ -73,6 +110,23 @@ def choose_threshold(max_moving_averages: Sequence[float]) -> float:
     the highest multiple of T_STEP that at least MIN_SEEDS_REACHING_T seeds
     reach.  T is never above DEFAULT_T.
     """
+    threshold = DEFAULT_T
+    
+    while threshold >= 0:
+        # Count seeds whose maximum moving average reaches the threshold.
+        count = sum(
+            value >= threshold
+            for value in max_moving_averages
+        )
+        
+        # If enough seeds reach it, return this threshold.
+        if count >= MIN_SEEDS_REACHING_T:
+            return float(threshold)
+        
+        # Otherwise, lower the threshold.
+        threshold -= T_STEP
+    
+    raise ValueError("Not enough reference seeds reach any valid threshold")
 
 
 def bootstrap_pairs(n_seeds: int, n_resamples: int = N_RESAMPLES,
@@ -85,6 +139,19 @@ def bootstrap_pairs(n_seeds: int, n_resamples: int = N_RESAMPLES,
     as one array, then all of B.  Fixed so the calibration is reproducible
     to the last digit.
     """
+    rng = np.random.default_rng(seed)
+    
+    A = rng.integers(
+        0, n_seeds,
+        size=(n_resamples, n_seeds),
+    )
+    
+    B = rng.integers(
+        0, n_seeds, 
+        size=(n_resamples, n_seeds),
+    )
+    
+    return A, B
 
 
 def calibrate(reference_runs: list[list[dict[str, Any]]],
@@ -104,6 +171,66 @@ def calibrate(reference_runs: list[list[dict[str, Any]]],
     Percentiles use NumPy's default method.  Uses no randomness other than
     bootstrap_pairs.
     """
+    if not reference_runs:
+        raise ValueError("reference_runs must contain at least one run")
+    
+    # A. Measure each reference run.
+    max_moving_averages = []
+    final_returns = []
+    
+    for episodes in reference_runs:
+        returns = [episode["return"] for episode in episodes]
+        averages = moving_average(returns, window=100)
+        
+        if len(averages) == 0:
+            raise ValueError("Each run needs at least 100 episodes")
+        
+        max_moving_averages.append(float(np.max(averages)))
+        final_returns.append(final_return(episodes))
+    
+    # B. Select the shared threshold.
+    T = choose_threshold(max_moving_averages)
+    
+    # C. Count seeds that reach T, then subtract 2
+    k = sum(value >= T for value in max_moving_averages) - 2
+    
+    # D. Record steps to threshold for each seed.
+    steps = [
+        steps_to_threshold(episodes, T, total_timesteps)[0]
+        for episodes in reference_runs
+    ]
+    
+    # Generate all bootstrap pairs once.
+    A, B = bootstrap_pairs(len(reference_runs))
+    
+    ratios = []
+    deltas = []
+    
+    # F. Calculate one ratio and one difference per resample.
+    for r in range(len(A)):
+        # Compare the median steps to threshold.
+        ratio = np.median(np.array(steps)[A[r]]) / np.median(np.array(steps)[B[r]])
+        ratios.append(ratio)
+        
+        # Compare final returns using the interquartile mean.
+        difference = (
+            iqm(np.array(final_returns)[A[r]])
+            - iqm(np.array(final_returns)[B[r]])
+        )
+        deltas.append(difference)
+    
+    # G. Summarize the bootstrap distributions.
+    q = float(np.percentile(ratios, 95))
+    F = max(F_FLOOR, q)
+    delta = float(np.percentile(deltas, 95))
+    
+    return {
+        "T": T,
+        "k": k,
+        "q": q,
+        "F": F,
+        "delta": delta,
+    }
 
 
 def check_gate(numpy_runs: list[list[dict[str, Any]]],
@@ -120,8 +247,96 @@ def check_gate(numpy_runs: list[list[dict[str, Any]]],
       passed    all three
     plus the numbers each decision was made from, so the report can show them.
     """
-
-
+    if not numpy_runs or not reference_runs:
+        raise ValueError("Both groups must contain at least one run")
+    
+    T = calibration["T"]
+    k = calibration["k"]
+    F = calibration["F"]
+    delta = calibration["delta"]
+    
+    # 1. Measure steps to threshold and whether each run reached it.
+    numpy_results = [
+        steps_to_threshold(run, T, total_timesteps)
+        for run in numpy_runs
+    ]
+    reference_results = [
+        steps_to_threshold(run, T, total_timesteps)
+        for run in reference_runs
+    ]
+    
+    numpy_steps = np.array([result[0] for result in numpy_results])
+    numpy_reached = np.array([result[1] for result in numpy_results])
+    
+    reference_steps = np.array(
+        [result[0] for result in reference_results]
+    )
+    
+    # 2. L3: enough NumPy seeds reached the threshold. 
+    numpy_reaching = int(np.sum(numpy_reached))
+    L3 = numpy_reaching >= k
+    
+    # 3. L4_steps: compare median steps, accounting for censoring.
+    median_numpy_steps = float(np.median(numpy_steps))
+    median_reference_steps = float(np.median(reference_steps))
+    
+    numpy_censored = int(np.sum(~numpy_reached))
+    too_many_censored = numpy_censored > len(numpy_runs) / 2
+    
+    allowed_steps = F * median_reference_steps
+    
+    L4_steps = (
+        not too_many_censored
+        and median_numpy_steps <= allowed_steps
+    )
+    
+    # 4. L4_final: compare final-window IQMs.
+    numpy_final_returns = np.array([
+        final_return(run) for run in numpy_runs 
+    ])
+    reference_final_returns = np.array([
+        final_return(run) for run in reference_runs
+    ])
+    
+    numpy_final_iqm = iqm(numpy_final_returns)
+    reference_final_iqm = iqm(reference_final_returns)
+    minimum_final_iqm = reference_final_iqm - delta
+    
+    L4_final = numpy_final_iqm >= minimum_final_iqm
+    
+    # 5. All three checks must pass.
+    passed = L3 and L4_steps and L4_final 
+    
+    return {
+        "L3": bool(L3),
+        "L4_steps": bool(L4_steps),
+        "L4_final": bool(L4_final),
+        "passed": bool(passed),
+        
+        # L3 measurements
+        "T": T,
+        "k": k,
+        "numpy_seeds_reaching_T": numpy_reaching,
+        
+        # L4_steps measurements
+        "numpy_steps": numpy_steps,
+        "reference_steps": reference_steps,
+        "median_numpy_steps": median_numpy_steps,
+        "median_reference_steps": median_reference_steps,
+        "numpy_censored": numpy_censored,
+        "too_many_censored": bool(too_many_censored),
+        "F": F,
+        "allowed_steps": allowed_steps,
+        
+        # L4_final measurements
+        "numpy_final_returns": numpy_final_returns,
+        "reference_final_returns": reference_final_returns,
+        "numpy_final_iqm": float(numpy_final_iqm),
+        "reference_final_iqm": float(reference_final_iqm),
+        "delta": delta,
+        "minimum_final_iqm": float(minimum_final_iqm),
+    }
+    
 # ======================================================================
 # Plumbing: finding and loading runs, and the command line
 # ======================================================================
