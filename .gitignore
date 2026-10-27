@@ -88,3 +88,7 @@ Presentations/
 *.docx
 # Claude Code subagent worktrees (isolated copies of the repo)
 .claude/worktrees/
+
+
+# Open BCI
+OpenBCI_GUI/
