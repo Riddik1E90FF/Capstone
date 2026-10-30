@@ -491,6 +491,29 @@ full NumPy-DQN CartPole run. Short smoke runs during development do not count as
 outcome data for this gate, but their results must not be used to set any number
 above.
 
+### Calibrated values (2026-10-30)
+
+Computed by `python scripts/gate1a.py calibrate --reference runs/gate1a/cleanrl
+--out docs/gate1a_calibration.json` (code at `eb0dbd8`), from the 10 CleanRL
+reference runs, seeds 1-10, completed 2026-10-20 at `4775283`. Run folders are
+listed in `docs/gate1a_calibration.json`. No full NumPy-DQN CartPole run
+existed when these were computed.
+
+| Number | Value | How it came out |
+|---|---|---|
+| T | **475** | The default. At least 8 of 10 reference seeds reached it, so the lowering rule did not apply. |
+| *k* | **8** | All 10 reference seeds reached T, minus 2. |
+| q | 1.0614 | The 95th percentile of the bootstrap median-steps ratio. |
+| F | **2** | max(2, q): the floor applies. |
+| δ | **14.4008** | The 95th percentile of the bootstrap IQM difference in final return. |
+
+**Gate 1a pass criteria for the NumPy DQN**, fixed from here on:
+
+- **L3:** at least 8 of 10 seeds reach a 100-episode moving average of 475.
+- **L4 steps:** median steps-to-475 ≤ 2 × the reference median. Fails
+  automatically if more than 5 seeds are censored.
+- **L4 final:** IQM of final return ≥ the reference IQM − 14.4008.
+
 ### Attempts
 
 Every Gate 1a attempt is logged with its date, commit, levels run and result,

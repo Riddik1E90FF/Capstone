@@ -1,0 +1,21 @@
+{
+  "created_utc": "2026-10-30T22:44:21.204325+00:00",
+  "rule": "D029",
+  "T": 475.0,
+  "k": 8,
+  "q": 1.061381908060928,
+  "F": 2.0,
+  "delta": 14.400750000000022,
+  "reference_runs": {
+    "1": "runs\\gate1a\\cleanrl\\CartPole-v1__cleanrl__seed1__20261020T210933Z",
+    "2": "runs\\gate1a\\cleanrl\\CartPole-v1__cleanrl__seed2__20261020T210933Z",
+    "3": "runs\\gate1a\\cleanrl\\CartPole-v1__cleanrl__seed3__20261020T210933Z",
+    "4": "runs\\gate1a\\cleanrl\\CartPole-v1__cleanrl__seed4__20261020T210933Z",
+    "5": "runs\\gate1a\\cleanrl\\CartPole-v1__cleanrl__seed5__20261020T210933Z",
+    "6": "runs\\gate1a\\cleanrl\\CartPole-v1__cleanrl__seed6__20261020T212940Z",
+    "7": "runs\\gate1a\\cleanrl\\CartPole-v1__cleanrl__seed7__20261020T212940Z",
+    "8": "runs\\gate1a\\cleanrl\\CartPole-v1__cleanrl__seed8__20261020T212940Z",
+    "9": "runs\\gate1a\\cleanrl\\CartPole-v1__cleanrl__seed9__20261020T212948Z",
+    "10": "runs\\gate1a\\cleanrl\\CartPole-v1__cleanrl__seed10__20261020T212955Z"
+  }
+}
