@@ -18,6 +18,12 @@ Metric definitions are fixed in D029 ("Metric definitions", confirmed
 
 from __future__ import annotations
 
+# Make this script runnable from any directory: put the repo root (this
+# file's parent's parent) on sys.path so `dqn` imports without PYTHONPATH.
+import sys as _sys
+from pathlib import Path as _Path
+_sys.path.insert(0, str(_Path(__file__).resolve().parent.parent))
+
 from typing import Any, Sequence
 
 import numpy as np
@@ -59,10 +65,10 @@ def steps_to_threshold(episodes: list[dict[str, Any]], threshold: float,
     episode.  steps: the global_step of the first episode at which it is;
     if it never is, the run is censored and steps = total_timesteps.
     """
-    window = 100
+    window = WINDOW
     # 1. Extract the return from each episode.
     returns = [episode["return"] for episode in episodes]
-    
+
     # 2. Calculate moving averages over complete 100-episode windows
     averages = moving_average(returns, window=window)
     
@@ -180,7 +186,7 @@ def calibrate(reference_runs: list[list[dict[str, Any]]],
     
     for episodes in reference_runs:
         returns = [episode["return"] for episode in episodes]
-        averages = moving_average(returns, window=100)
+        averages = moving_average(returns, window=WINDOW)
         
         if len(averages) == 0:
             raise ValueError("Each run needs at least 100 episodes")
@@ -202,20 +208,24 @@ def calibrate(reference_runs: list[list[dict[str, Any]]],
     
     # Generate all bootstrap pairs once.
     A, B = bootstrap_pairs(len(reference_runs))
-    
+
+    # Convert once, outside the 10,000-iteration loop.
+    steps = np.array(steps)
+    final_returns = np.array(final_returns)
+
     ratios = []
     deltas = []
-    
+
     # F. Calculate one ratio and one difference per resample.
     for r in range(len(A)):
         # Compare the median steps to threshold.
-        ratio = np.median(np.array(steps)[A[r]]) / np.median(np.array(steps)[B[r]])
+        ratio = np.median(steps[A[r]]) / np.median(steps[B[r]])
         ratios.append(ratio)
-        
+
         # Compare final returns using the interquartile mean.
         difference = (
-            iqm(np.array(final_returns)[A[r]])
-            - iqm(np.array(final_returns)[B[r]])
+            iqm(final_returns[A[r]])
+            - iqm(final_returns[B[r]])
         )
         deltas.append(difference)
     
@@ -318,9 +328,9 @@ def check_gate(numpy_runs: list[list[dict[str, Any]]],
         "k": k,
         "numpy_seeds_reaching_T": numpy_reaching,
         
-        # L4_steps measurements
-        "numpy_steps": numpy_steps,
-        "reference_steps": reference_steps,
+        # L4_steps measurements (plain lists, so the result is JSON-ready)
+        "numpy_steps": numpy_steps.tolist(),
+        "reference_steps": reference_steps.tolist(),
         "median_numpy_steps": median_numpy_steps,
         "median_reference_steps": median_reference_steps,
         "numpy_censored": numpy_censored,
@@ -329,8 +339,8 @@ def check_gate(numpy_runs: list[list[dict[str, Any]]],
         "allowed_steps": allowed_steps,
         
         # L4_final measurements
-        "numpy_final_returns": numpy_final_returns,
-        "reference_final_returns": reference_final_returns,
+        "numpy_final_returns": numpy_final_returns.tolist(),
+        "reference_final_returns": reference_final_returns.tolist(),
         "numpy_final_iqm": float(numpy_final_iqm),
         "reference_final_iqm": float(reference_final_iqm),
         "delta": delta,
@@ -346,6 +356,9 @@ def check_gate(numpy_runs: list[list[dict[str, Any]]],
 # config.json, meta.json, summary.json and episodes.jsonl.
 
 from pathlib import Path  # noqa: E402
+import json
+from dqn.runlog import read_jsonl
+import argparse
 
 SEEDS = tuple(range(1, 11))          # D029: seeds 1-10 for both implementations
 
@@ -360,7 +373,29 @@ def find_runs(root: str | Path, seeds: Sequence[int] = SEEDS,
     ValueError if any seed has no folder, or more than one: Gate 1a must
     never silently use 9 seeds or pick between two runs of the same seed.
     """
+    root = Path(root)
+    runs = {}
 
+    for path in root.iterdir():
+        if path.is_dir():
+            config_path = path / "config.json"
+            if not config_path.is_file():
+                continue
+
+            with config_path.open("r", encoding="utf-8") as f:
+                config = json.load(f)
+            if config["seed"] not in seeds or config["total_timesteps"] != total_timesteps:
+                continue
+
+            seed = config["seed"]
+            
+            if seed in runs:
+                raise ValueError(f"Multiple run folders found for seed {seed}")
+            runs[seed] = path
+    missing = set(seeds) - runs.keys()
+    if missing:
+        raise ValueError(f"Missing seeds found: {missing}")
+    return runs
 
 def load_episodes(run_dir: str | Path) -> list[dict[str, Any]]:
     """The episode records of one finished run, in episode order.
@@ -369,6 +404,102 @@ def load_episodes(run_dir: str | Path) -> list[dict[str, Any]]:
     a crashed or still-running run is not evidence.  Reading episodes.jsonl
     can use dqn.runlog.read_jsonl.
     """
+    run_dir = Path(run_dir)
+    
+    summary_path = run_dir / "summary.json"
+    episodes_path = run_dir / "episodes.jsonl"
+    
+    if not summary_path.is_file():
+        raise ValueError(f"{summary_path} is not a file")
+    
+    with summary_path.open("r", encoding="utf-8") as f:
+        summary = json.load(f)
+        
+    if summary["status"] != "completed":
+        raise ValueError("Summary is not completed.")
+    
+    rows = read_jsonl(episodes_path)
+    
+    return sorted(rows, key=lambda row: row["episode"])
+
+
+# ----------------------------------------------------------------------
+# Reporting (Claude): printing and writing results.  The command line
+# below loads the runs and makes the calibrate / check_gate calls; these
+# helpers only present what those return.
+# ----------------------------------------------------------------------
+
+def _seed_rows(seeds: Sequence[int], episode_lists: list[list[dict[str, Any]]],
+               threshold: float) -> list[str]:
+    """One table line per seed: reached, steps-to-T, max moving average, final return."""
+    lines = [f"  {'seed':>4}  {'reached':>7}  {'steps-to-T':>10}  {'max MA':>7}  {'final':>7}"]
+    for seed, episodes in zip(seeds, episode_lists):
+        steps, reached = steps_to_threshold(episodes, threshold)
+        averages = moving_average([e["return"] for e in episodes])
+        max_ma = float(np.max(averages)) if len(averages) else float("nan")
+        censored = "" if reached else " (censored)"
+        lines.append(f"  {seed:>4}  {str(reached):>7}  {steps:>10,}  {max_ma:>7.1f}  "
+                     f"{final_return(episodes):>7.1f}{censored}")
+    return lines
+
+
+def print_calibration(seeds: Sequence[int], episode_lists: list[list[dict[str, Any]]],
+                      calibration: dict[str, Any]) -> None:
+    """Per-seed reference table, then T, k, q, F and delta."""
+    print(f"Reference runs, threshold T = {calibration['T']:g}")
+    print("\n".join(_seed_rows(seeds, episode_lists, calibration["T"])))
+    print()
+    print(f"  T     = {calibration['T']:g}")
+    print(f"  k     = {calibration['k']}   (reference seeds reaching T, minus 2)")
+    print(f"  q     = {calibration['q']:.4f}   (95th pct of bootstrap median-steps ratio)")
+    print(f"  F     = {calibration['F']:.4f}   (max(2, q))")
+    print(f"  delta = {calibration['delta']:.4f}   (95th pct of bootstrap IQM difference)")
+
+
+def write_calibration(path: str | Path, calibration: dict[str, Any],
+                      runs: dict[int, Path]) -> None:
+    """Write the calibration and the run folders it came from as JSON.
+
+    Opened in exclusive-create mode ("x"), so an existing file is never
+    overwritten even if the caller forgot to check: the numbers are set once.
+    """
+    from datetime import datetime, timezone
+
+    record = {
+        "created_utc": datetime.now(timezone.utc).isoformat(),
+        "rule": "D029",
+        **{k: calibration[k] for k in ("T", "k", "q", "F", "delta")},
+        "reference_runs": {str(seed): str(runs[seed]) for seed in sorted(runs)},
+    }
+    with open(path, "x", encoding="utf-8") as f:
+        f.write(json.dumps(record, indent=2) + "\n")
+
+
+def print_check(seeds: Sequence[int], numpy_lists: list[list[dict[str, Any]]],
+                reference_lists: list[list[dict[str, Any]]], result: dict[str, Any]) -> None:
+    """Per-seed tables for both implementations, then each decision and its numbers."""
+    T = result["T"]
+    for name, lists in (("NumPy DQN", numpy_lists), ("CleanRL reference", reference_lists)):
+        print(f"{name}, threshold T = {T:g}")
+        print("\n".join(_seed_rows(seeds, lists, T)))
+        print()
+
+    def verdict(ok: bool) -> str:
+        return "PASS" if ok else "FAIL"
+
+    print(f"L3        {verdict(result['L3'])}   "
+          f"{result['numpy_seeds_reaching_T']} NumPy seeds reach T; need k = {result['k']}")
+    censored_note = (f"; {result['numpy_censored']} censored (more than half: automatic fail)"
+                     if result["too_many_censored"] else f"; {result['numpy_censored']} censored")
+    print(f"L4_steps  {verdict(result['L4_steps'])}   "
+          f"median NumPy {result['median_numpy_steps']:,.0f} <= F x median ref = "
+          f"{result['F']:.4f} x {result['median_reference_steps']:,.0f} = "
+          f"{result['allowed_steps']:,.0f}{censored_note}")
+    print(f"L4_final  {verdict(result['L4_final'])}   "
+          f"IQM NumPy {result['numpy_final_iqm']:.2f} >= IQM ref - delta = "
+          f"{result['reference_final_iqm']:.2f} - {result['delta']:.4f} = "
+          f"{result['minimum_final_iqm']:.2f}")
+    print(f"passed    {verdict(result['passed'])}")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -391,8 +522,90 @@ def main(argv: list[str] | None = None) -> int:
     gate is still a successful run of the script (exit 0); the decision is
     in the output.
     """
+    parser = argparse.ArgumentParser(
+        description="Calibrate and validate Gate 1a DQN benchmarks."
+    )
+    
+    subparsers = parser.add_subparsers(
+        dest="command",
+        required=True,
+    )
+    
+    calibrate_parser = subparsers.add_parser(
+    "calibrate",
+    help="Calibrate using CleanRL reference runs."
+    )
 
+    calibrate_parser.add_argument(
+        "--reference",
+        required=True,
+        type=Path,
+        help="Directory containing reference runs."
+    )
 
+    calibrate_parser.add_argument(
+        "--out",
+        required=True,
+        type=Path,
+        help="File where calibration results will be saved."
+    )
+    
+    check_parser = subparsers.add_parser(
+    "check",
+    help="Compare NumPy DQN against CleanRL reference runs."
+    )
+
+    check_parser.add_argument(
+        "--reference",
+        required=True,
+        type=Path,
+        help="Directory containing reference runs."
+    )
+    
+    check_parser.add_argument(
+    "--numpy",
+    required=True,
+    type=Path,
+    help="NumPy DQN directory."
+    )
+
+    check_parser.add_argument(
+        "--calibration",
+        required=True,
+        type=Path,
+        help="Previously generated calibration JSON file."
+    )
+    
+    args = parser.parse_args(argv)
+    
+    if args.command == "calibrate":
+        if args.out.exists():
+            raise FileExistsError(
+                f"Calibration file already exists: {args.out}"
+            )
+        runs = find_runs(args.reference)
+        seeds = sorted(runs)
+        episode_lists = [load_episodes(runs[seed]) for seed in seeds]
+        calibration = calibrate(episode_lists)
+        
+        print_calibration(seeds, episode_lists, calibration)
+        write_calibration(args.out, calibration, runs)
+        return 0
+    else:
+        calibration = json.loads(args.calibration.read_text()) 
+        reference_runs = find_runs(args.reference)
+        numpy_runs = find_runs(args.numpy)
+        seeds = sorted(reference_runs)
+        
+        reference_lists = [load_episodes(reference_runs[seed]) for seed in seeds]
+        numpy_lists = [load_episodes(numpy_runs[seed]) for seed in seeds]
+
+        
+        result = check_gate(numpy_lists, reference_lists, calibration)
+        print_check(seeds, numpy_lists, reference_lists, result)
+        
+        return 0
+    
 if __name__ == "__main__":
     import sys
 

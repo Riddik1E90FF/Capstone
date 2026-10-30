@@ -314,10 +314,20 @@ Read before doing anything substantive:
   package versions, start/end time and completed/crashed status. Stdlib only.
   Not yet wired into any runner.
 
+- Step 8: unmodified CleanRL reference in `third_party/cleanrl/` and
+  `scripts/run_cleanrl_reference.py` (run + log conversion). The 10
+  reference runs (seeds 1-10) completed 2026-10-20 in
+  `runs/gate1a/cleanrl/`.
+- `scripts/gate1a.py`: calibration and L3/L4 check functions (user),
+  passing `tests/test_gate1a.py`. Metric definitions and bootstrap draw
+  order recorded in D029.
+
 ### What does not exist yet
 
-- Step 8 (CleanRL reference runner, log conversion, comparison plots), then
-  Gate 1a L3/L4 calibration from reference runs and the NumPy-DQN runs.
+- `scripts/gate1a.py` plumbing (`find_runs`, `load_episodes`, `main`; user).
+  Then calibrate on the reference runs, record T/k/F/δ in D029 and commit
+  **before** any full NumPy-DQN CartPole run, then the 10 NumPy-DQN runs
+  and the L3/L4 check. Comparison plots are not written yet.
 - The curriculum sampler.
 - The EEG pipeline.
 

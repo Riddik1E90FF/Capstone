@@ -473,7 +473,13 @@ reference result was looked at; the 10 reference runs were in progress):
    lowest and the 2 highest, then average the remaining 6. This is
    `scipy.stats.trim_mean(x, 0.25)`, the rliable convention.
 3. **Bootstrap:** 10,000 resamples, with replacement, NumPy
-   `default_rng(0)`, and NumPy's default (linear) percentile.
+   `default_rng(0)`, and NumPy's default (linear) percentile. **Draw order**
+   (confirmed 2026-10-26, before calibration was run on the reference
+   data): from one `default_rng(0)`, all group-A indices are drawn first, as
+   one `(10000, 10)` array of integers in `[0, 10)`, then all group-B
+   indices the same way. Row r of A and row r of B form the r-th pair. F
+   and δ are computed from the **same** pairs. This makes the calibration
+   reproducible to the last digit (`scripts/gate1a.py`, `bootstrap_pairs`).
 4. **Censoring:** a seed that never reaches T counts as `total_timesteps`
    (500,000) inside the bootstrap median-steps ratios.
 

@@ -106,7 +106,9 @@ def _json_default(value: Any) -> Any:
     if dataclasses.is_dataclass(value) and not isinstance(value, type):
         return dataclasses.asdict(value)
     if isinstance(value, Path):
-        return str(value)
+        # Forward slashes on every OS, so a manifest written on Windows
+        # matches one written on Linux for the same config.
+        return value.as_posix()
     # NumPy scalars and arrays, without importing NumPy.
     if hasattr(value, "tolist"):
         return value.tolist()
