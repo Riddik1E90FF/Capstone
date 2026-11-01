@@ -70,6 +70,8 @@ def make_env_factory(env_id: str) -> tuple[EnvFactory, int, int]:
         if not 0 <= config_id < N_CONFIGS:
             raise SystemExit(f"combat config id must be in 0..{N_CONFIGS - 1}, got {config_id}")
         return (lambda seed: make_env(config_id, seed=seed)), OBS_DIM, N_ACTIONS
+    if env_id == "combat:mix":
+        return _mixture_factory(), OBS_DIM, N_ACTIONS
 
     # Anything else is treated as a Gymnasium id.  Imported here, not at the
     # top, so combat-env runs do not need Gymnasium installed at all.

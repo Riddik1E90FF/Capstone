@@ -1,7 +1,10 @@
 # Capstone Roadmap
 
 **Status:** Living development plan  
-**Starting state:** Phase 0 — no confirmed prototype, dataset, hardware, or final implementation stack
+**Status as of 2026-11-01 (week 4 of 10):** Phases 0 and 1 complete. The DQN is
+implementation-verified (Gate 1a, L1–L4, D029) but has never been trained on the
+combat environment. The EEG half is the critical path: hardware is assembled but
+has not been powered on, and no preprocessing pipeline exists.
 
 ---
 
@@ -13,7 +16,7 @@ The project succeeds if the research question can be tested rigorously. A large 
 
 ---
 
-# Phase 0 — Research and architecture
+# Phase 0 — Research and architecture  ✅ COMPLETE
 
 ## Goal
 
@@ -21,19 +24,19 @@ Remove the decisions that would invalidate or force major rewrites later.
 
 ### Tasks
 
-- [ ] Confirm the human EEG-recording architecture.
-- [ ] Define exactly what the human does during recording.
-- [ ] Define the candidate neural/physiological state.
-- [ ] Determine how that state can obtain defensible labels/ground truth.
-- [ ] Define what "improvement" means.
-- [ ] Select primary and secondary dependent variables.
-- [ ] Define the independent variable.
-- [ ] Define candidate controls/baselines.
-- [ ] Define the smallest viable combat task.
-- [ ] Determine whether a custom simulator is appropriate.
-- [ ] Determine institutional ethics/IRB requirements.
-- [ ] Survey public EEG datasets.
-- [ ] Create an initial preregistration/research plan.
+- [x] Confirm the human EEG-recording architecture.
+- [x] Define exactly what the human does during recording.
+- [x] Define the candidate neural/physiological state.
+- [x] Determine how that state can obtain defensible labels/ground truth.
+- [x] Define what "improvement" means.
+- [x] Select primary and secondary dependent variables.
+- [x] Define the independent variable.
+- [x] Define candidate controls/baselines.
+- [x] Define the smallest viable combat task.
+- [x] Determine whether a custom simulator is appropriate.
+- [x] Determine institutional ethics/IRB requirements.
+- [x] Survey public EEG datasets.
+- [x] Create an initial preregistration/research plan.
 
 ### Gate
 
@@ -41,7 +44,7 @@ Do not move into large implementation until the research question, human role, m
 
 ---
 
-# Phase 1 — Minimal combat environment
+# Phase 1 — Minimal combat environment  ✅ COMPLETE
 
 ## Goal
 
@@ -74,7 +77,7 @@ The environment must produce meaningful trajectories and expose measurable comba
 
 ---
 
-# Phase 2 — Non-EEG RL baseline
+# Phase 2 — Non-EEG RL baseline  🟡 IN PROGRESS — Gate 1a passed; Gate 1 not attempted
 
 ## Goal
 
@@ -82,16 +85,16 @@ Prove that the environment can support learning before EEG is introduced.
 
 ### Tasks
 
-- [ ] Define observation space.
-- [ ] Define action space.
+- [x] Define observation space.
+- [x] Define action space.
 - [ ] Define reward.
-- [ ] Benchmark appropriate RL algorithms.
+- [x] Benchmark appropriate RL algorithms.
 - [ ] Train baseline agents.
 - [ ] Establish evaluation protocol.
 - [ ] Measure learning curves.
 - [ ] Measure combat metrics.
-- [ ] Establish random-seed handling.
-- [ ] Save checkpoints and experiment configurations.
+- [x] Establish random-seed handling.
+- [x] Save checkpoints and experiment configurations.
 
 ### Gate
 
@@ -101,7 +104,7 @@ If the baseline cannot learn, do not add EEG complexity yet.
 
 ---
 
-# Phase 3 — EEG pipeline
+# Phase 3 — EEG pipeline  🟡 STARTED — dataset verified (D032); pipeline not built
 
 ## Goal
 
@@ -109,9 +112,9 @@ Develop EEG processing independently from the RL environment.
 
 ### Tasks
 
-- [ ] Select development dataset(s).
-- [ ] Establish data provenance.
-- [ ] Load and inspect raw EEG.
+- [x] Select development dataset(s).
+- [x] Establish data provenance.
+- [x] Load and inspect raw EEG.
 - [ ] Establish signal-quality checks.
 - [ ] Evaluate filtering.
 - [ ] Evaluate artifact handling.
@@ -137,7 +140,7 @@ The preprocessing pipeline must be reproducible and its limitations documented.
 
 ---
 
-# Phase 4 — Neural-state estimation
+# Phase 4 — Neural-state estimation  ⬜ NOT STARTED
 
 ## Goal
 
@@ -164,7 +167,7 @@ There must be a defensible argument for what the estimator measures and what it 
 
 ---
 
-# Phase 5 — Curriculum interface
+# Phase 5 — Curriculum interface  ⬜ NOT STARTED
 
 ## Goal
 
@@ -198,7 +201,7 @@ All curriculum conditions should use comparable environment interfaces.
 
 ---
 
-# Phase 6 — Integrated neuroadaptive RL
+# Phase 6 — Integrated neuroadaptive RL  ⬜ NOT STARTED
 
 ## Goal
 
@@ -221,7 +224,7 @@ Experiments must be reproducible from recorded configuration and code version.
 
 ---
 
-# Phase 7 — Statistical analysis
+# Phase 7 — Statistical analysis  ⬜ NOT STARTED
 
 ## Goal
 
@@ -250,7 +253,7 @@ The conclusion must distinguish:
 
 ---
 
-# Phase 8 — Robustness and extension
+# Phase 8 — Robustness and extension  ⬜ STRETCH ONLY
 
 Only after the core experiment works:
 
@@ -267,7 +270,7 @@ These are optional extensions.
 
 ---
 
-# Phase 9 — Capstone documentation and presentation
+# Phase 9 — Capstone documentation and presentation  ⬜ NOT STARTED
 
 ### Deliverables
 
@@ -304,10 +307,25 @@ Do not sacrifice the experiment for game polish.
 
 # Current next actions
 
-1. Resolve the human-recording architecture.
-2. Define the minimum viable experiment.
-3. Draft the preregistration.
-4. Investigate ethics/IRB requirements.
-5. Survey public EEG datasets.
-6. Design the minimal parameterized combat environment.
-7. Only then commit to the implementation stack.
+Updated 2026-11-01. Ordered by how much each reduces the risk of the project
+failing, not by phase number.
+
+1. **Hardware validation gate.** Power on the Cyton + Ultracortex for the first
+   time. Impedance per channel, eyes-closed alpha at Pz, blink and jaw-clench
+   artifact check, 60 Hz notch, both ear clips. Untouched for three weeks and
+   the only item with an irreducible lead time if something is faulty.
+2. **Gate 1** — train the DQN on `combat:12`. The algorithm is cleared, so a
+   failure now points at the environment, observation space or the provisional
+   reward (OPEN-06) rather than at the learner.
+3. **Agent per-configuration sweep** across all 25 configurations, to produce
+   the agent difficulty ranking.
+4. **Human play session, no EEG** (`scripts/play.py --session`), to produce the
+   human difficulty ranking.
+5. **Gate 2** — Spearman rank correlation between 3 and 4. Needs no hardware and
+   is the experiment most able to falsify the project's central premise, so it
+   should be run early rather than late.
+6. Curriculum sampler (one implementation, ordering source injected).
+7. EEG preprocessing pipeline, developed against EEGMAT.
+
+Deferred until the above are done: Phase 8 entirely, and any further work on
+combat feel, rendering or enemy variety.

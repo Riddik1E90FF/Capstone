@@ -192,12 +192,31 @@ by reduction to **rank over the same fixed 25 configurations**.
 
 | Gate | Quantity | Reduction |
 |---|---|---|
-| Gate 1 (agent) | Per-configuration success rate, trained baseline agent | Rank |
-| Gate 2 (human) | Per-configuration success rate and median reaction time | Rank |
+| Gate 1 (agent) | Per-configuration mean damage taken, trained baseline agent | Rank |
+| Gate 2 (human) | Per-configuration mean damage taken and median reaction time | Rank |
 | Gate 3 (EEG) | Median workload index over clean windows per configuration | Rank |
 
+**Direction.** Mean damage taken increases with difficulty, so it ranks in the
+*opposite* direction to a performance measure. Every correlation in §6 and §10
+is computed on the difficulty ordering, and the expected sign is stated with
+each hypothesis rather than inferred from the metric.
+
+**Saturation.** Damage taken is effectively bounded by agent maximum health —
+the episode ends at death, though the fatal blow may overshoot it — so the
+measure compresses wherever an agent dies often. The fraction of episodes reaching that
+bound is reported per configuration alongside the mean, so compression is
+visible rather than silent. If it exceeds 25% of episodes in a configuration,
+that configuration's rank is flagged as unreliable in the analysis.
+
+**Relationship to §8.** Damage taken is used here as the quantity that *orders
+configurations*. Its status in §8 as an exploratory dependent variable is
+unchanged, and it is not promoted to a hypothesis-tested outcome of the
+experiment. The primary dependent variable remains mean normalized return on
+the held-out configuration set. These are distinct roles: one defines the
+curriculum's ordering, the other measures whether the curriculum helped.
+
 Agreement between systems is measured by Spearman rank correlation. The EEG index
-is never converted into a success-rate equivalent or a difficulty percentage; it
+is never converted into a damage-taken equivalent or a difficulty percentage; it
 sorts 25 configurations and nothing more. The frontier sampler consumes an
 ordering, never calibrated magnitudes.
 
@@ -325,7 +344,7 @@ family and labelled secondary.
 
 **Gate 1 — the learning problem works.** A non-EEG baseline agent learns the task
 to non-trivial performance, reproducibly across seeds, and its per-configuration
-success rates are ordered rather than uniform. Produces the variance estimate for
+mean damage taken is ordered rather than uniform. Produces the variance estimate for
 the Stage-2 amendment.
 *Fail →* environment, reward, or algorithm is wrong. No EEG work proceeds.
 
@@ -392,6 +411,7 @@ reason, and whether outcome data had been seen.
 |---|---|---|---|---|
 | 2026-10-07 | §10 Gate 1a | **Clarification, no design change.** Gate 1a's criteria operationalised in `DECISIONS.md` D029: CartPole-v1 benchmark, CleanRL `dqn.py` reference, four levels, and pass-criterion form. Thresholds are calibrated on reference runs before any NumPy-DQN benchmark run. Pointer added to §10. | §10 said "tracks a reference implementation's learning curve" without defining *tracks*. The criterion has to be fixed before the curves exist rather than judged afterward. | No. No DQN, reference, or experimental-condition data existed. |
 | 2026-10-14 | §5 Environment | **Environment behaviour change.** A tick on which agent and enemy both reach 0 health now resolves as `loss` (previously `win`, which paid the +60 win bonus and counted as a success). See `DECISIONS.md` D031. | Checking enemy death first rewarded trading the agent's life for the kill and counted mutual KOs as successes in the per-configuration rates used at Gates 1 and 2. | No. No agent-training, human-session or experimental-condition data existed. |
+| 2026-11-01 | §6, §10 Gate 1 | **Ranking quantity changed.** Gates 1 and 2 rank configurations by per-configuration **mean damage taken** instead of success rate. Success rate is retained as a secondary descriptive measure. Direction, saturation reporting and the boundary with §8 added to §6. Candidate metrics were evaluated empirically before the choice; see `DECISIONS.md` **D035**. | Floor measurement (D034) showed a competent policy wins 19 of 25 configurations outright, giving only 7 distinct success-rate values across 25 configurations. A rank built on that is ~76% ties, and the Gate 2 correlation would have been computed over a near-degenerate vector. Mean damage taken gives 22 of 25 distinct values for the same policy, responds to both difficulty axes near-equally (44.2 vs 43.9, ratio 1.01), and is what D026 calibrated the axes on. | No. No agent has been trained on the combat environment, no human session has been run, and no experimental-condition data exists. The defect was found in the pre-training floors, which exist to be measured before the gate they calibrate. |
 
 **Pending and expected:** the Stage-2 amendment to §9 (seed count, smallest
 effect size) after Gate 1.

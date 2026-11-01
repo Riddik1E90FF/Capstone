@@ -525,6 +525,7 @@ gate. Re-running unchanged code with new seeds until it passes is not.
 | 2026-10-20 | `531f33d` | L1 | PASS. All component tests (steps 1–6, and step 7a's `gradient_update` against the same calls made by hand). Loop composition against a stub env: `tests/test_train.py`, 34 tests. |
 | 2026-10-20 | `531f33d` | L2 | PASS, first run. `tests/test_l2_chain.py`: 3-state quit chain with a terminal action and a 4-step truncation, γ = 0.9. Q\* derived by hand by the user (S: 8.1 / 1, A: 9 / 0, B: 10 / 0), cross-checked by value iteration. Tolerance ±0.5 and config fixed before the first run. Seeds 1, 2, 3: max \|Q − Q\*\| = 0.001, 0.003, 0.001. Before this run, planted bugs in a scratch copy each failed by ≥ 4.5: masking on truncation, never storing `terminated`, storing the reset observation as s′, never syncing, wrong γ. |
 | 2026-10-30 | `1c0c0ed` | L3, L4 | **PASS, first attempt.** 10 NumPy-DQN runs (seeds 1-10, 500k steps, `runs/gate1a/numpy/`, all `completed`, clean tree at the calibration commit) against the 10 reference runs, with the calibration fixed beforehand. **L3:** 10 of 10 seeds reach T = 475 (need k = 8). **L4 steps:** median steps-to-T 268,244 vs reference 273,698 (allowed: 2 × = 547,395); 0 censored. **L4 final:** IQM final return 495.76 vs reference 497.85 (allowed: ≥ 483.44). `scripts/gate1a.py check`. **Gate 1a passed: L1-L4.** |
+| 2026-11-01 | `c3cbd0e` | L3, L4 | **PASS, attempt 2 — NumPy 2.5.4 (D033).** Ten seeds re-run under the upgraded interpreter into `runs/gate1a/numpy_np2/`, checked against the **unchanged** calibration. Every metric reproduced exactly: L3 10/10 reach T; L4 steps median 268,244 vs 273,698; L4 final IQM 495.76 vs 497.85. Stronger than a re-pass: all ten `episodes.jsonl` logs are **bit-identical** (SHA-256) to the 1.26.4 runs, so the agent's trajectory is byte-for-byte reproducible across a major NumPy version bump. |
 
 Development smoke runs (not attempts, and not used for any calibration
 number): 2026-10-20, 50k-step CartPole-v1 and 20k-step `combat:12` runs to
@@ -650,7 +651,7 @@ Electroencephalograms during Mental Arithmetic Task Performance. *Data*,
 
 ## D033 — Pin the numerical environment; re-prove Gate 1a on NumPy 2.x
 
-**Status:** DECIDED (2026-11-01); verification PENDING
+**Status:** CONFIRMED (2026-11-01)
 
 **What happened.** Installing `mne` for D032 upgraded NumPy in the Anaconda
 base environment from 1.26.4 to 2.5.4. Gate 1a passed under 1.26.4
@@ -688,4 +689,233 @@ mean the DQN depends on NumPy 1.x numerical behaviour, which is itself worth
 knowing before the combat experiments. It is not a licence to revert and
 pretend the first pass still stands.
 
-**Verification result:** PENDING — append here with its date.
+**Verification result:** CONFIRMED (2026-11-01). Attempt 2 passed at commit
+`c3cbd0e` under NumPy 2.5.4, recorded in D029's attempts table. All ten
+`episodes.jsonl` logs hash identically (SHA-256) to the NumPy 1.26.4 runs, so
+the version change altered nothing: not the PCG64 action stream, and not the
+float64 arithmetic downstream of it. The concern that motivated this entry —
+that reduction or BLAS changes between 1.26 and 2.5 might perturb results —
+did not materialise at this network size and dtype. It was still worth
+checking, and worth reporting: the claim is now measured rather than assumed.
+
+`requirements-lock.txt` pins the environment that produced the passing runs.
+Any future NumPy change repeats this procedure rather than assuming the result
+carries over.
+
+---
+
+## D034 — Gate 1: operational criteria
+
+**Status:** DECIDED (2026-11-01); metric amended by D035 same day; floors and attempts PENDING
+
+Pre-registration §10 defines Gate 1 in prose: "a non-EEG baseline agent learns
+the task to non-trivial performance, reproducibly across seeds, and its
+per-configuration success rates are ordered rather than uniform." That is not
+yet testable. This entry fixes the measurement and the thresholds **before any
+combat training run**, for the same reason D029 did for Gate 1a: a threshold
+chosen after seeing the outcome is not a threshold.
+
+### What the baseline agent is
+
+One DQN trained on a **uniform random mixture of all 25 configurations** — a
+configuration is drawn uniformly at reset — then evaluated on each
+configuration separately. One agent, not 25.
+
+Chosen because §10 says "**its** per-configuration success rates", singular,
+and because it matches the human protocol: a participant meets all 25
+configurations in one session carrying general combat skill, and never relearns
+from scratch. Twenty-five separately trained agents would measure learnability
+from scratch, which is a different construct and a weaker match for the Gate 2
+correlation. It is retained as an optional secondary analysis, not the primary.
+
+**Stated openly:** a uniform mixture is operationally close to the RANDOM
+experimental condition, so the Gate 2 reference agent is approximately the
+random-curriculum agent. This is accepted deliberately — RANDOM is the natural
+neutral reference, and no EEG information enters Gate 1 or Gate 2 — but it must
+not be presented later as a condition-independent measurement.
+
+### Measurement
+
+- **Mean damage taken** for a configuration (primary, D035): the mean of
+  `EpisodeStats.damage_taken` over `N_eval = 200` evaluation episodes, under
+  the greedy policy (ε = 0), on fixed evaluation seeds disjoint from the
+  training seeds. Higher means harder.
+- **Success rate** (secondary, descriptive only): the fraction of those
+  episodes ending with outcome `win`. Reported, never used to rank.
+- **Saturation**: the fraction of episodes in which damage taken reaches agent
+  maximum health, reported per configuration.
+- **Seeds:** 10 training seeds (1–10), matching D029.
+- **Budget:** 500k environment steps per seed, revisited only if G1-a fails
+  for budget reasons rather than learning reasons.
+
+### Floors, measured before training
+
+Both floors are evaluated on the same 25 configurations with the same
+`N_eval` and the same evaluation seeds:
+
+- `F_random` — uniform random action selection.
+- `F_scripted` — the existing `scripts/axis_sweep.py` policy.
+
+Floor values are appended to this entry with their date **before** the first
+training run, and are not recomputed afterwards.
+
+### Pass criteria
+
+- **G1-a (non-trivial).** For a seed to pass, its mean damage taken across the
+  25 configurations must be **≤ 0.75 × `F_random`'s mean** — a reduction of at
+  least 25% relative to random action selection. Expressed as a ratio rather
+  than an absolute, because damage taken is on a 0–100 scale whose floor value
+  is a property of the environment, not of the agent. Fixed in advance; a 25%
+  reduction is unambiguously learning rather than seed noise.
+- **G1-b (reproducible).** **≥ 8 of 10** seeds satisfy G1-a. k = 8 by analogy
+  with D029, deliberately reused so the two gates demand the same consistency.
+- **G1-c (ordered, not uniform).** The observed spread in per-configuration
+  mean damage taken (max − min, pooled across passing seeds) must exceed the
+  **95th percentile** of a null distribution built by permuting configuration
+  labels across evaluation episodes, 10,000 permutations, seed 0. A permutation test
+  is used instead of a fixed spread threshold because it needs no invented
+  constant and reuses the machinery of the §9 analysis plan.
+
+All three must hold. A pass releases the Stage-2 amendment: the between-seed
+variance in the primary dependent variable, measured here, sets the seed count
+and smallest detectable effect size.
+
+### On failure
+
+Gate 1a has already cleared the algorithm, so a Gate 1 failure is isolated to
+the environment, the observation space, or the provisional reward (OPEN-06).
+Diagnosis proceeds in that order. Any reward change is a pre-registration §12
+deviation and invalidates cross-experiment comparison with runs made before it.
+Re-running unchanged code with new seeds until it passes is not a diagnosis.
+
+**Floors:** RECORDED 2026-11-01, commit `c3cbd0e`, NumPy
+2.2.6, n_eval = 200, evaluation seeds
+1000000–1000199, random-policy
+seed 0. Full per-configuration values in
+`docs/gate1_floors.json`.
+
+| floor | mean damage taken | spread | mean win rate |
+|---|---|---|---|
+| random | **80.5196** | 61.9365 | 0.6450 |
+| scripted | 46.1333 | 85.7800 | 0.9592 |
+
+**G1-a threshold, now fixed: mean damage taken ≤ 0.75 × 80.5196 =
+60.3897.** The scripted policy reaches 46.1333, so the bar is
+attainable by a competent policy without being trivial — but the scripted
+policy's value is context, not a criterion, and the threshold stands whatever
+the agent turns out to score.
+
+The scripted floor is monotone in both axes across effectively the whole grid
+(11.16 at the easiest configuration to
+96.94 at the hardest), which is the ordering
+property Gate 2 depends on.
+
+**Saturation flags.** Under the D035 rule (>25% of episodes reaching the health
+bound), the scripted floor flags configurations 19, 24
+— the two hardest cells. Every other configuration is at or near 0%. A trained
+agent should saturate less, but if these configurations stay flagged their
+ranks are treated as unreliable in the Gate 2 correlation rather than silently
+included.
+**Attempts:** PENDING — one row per attempt, as in D029.
+
+
+---
+
+## D035 — Gate 1/Gate 2 ranking metric: mean damage taken
+
+**Status:** CONFIRMED (2026-11-01)
+
+Pre-registration §6 originally ranked configurations by **success rate** for
+both Gate 1 and Gate 2. The Gate 1 floors (D034), measured before any agent was
+trained, showed that this cannot work.
+
+### The defect
+
+| policy | mean win rate | configs at exactly 1.000 | distinct values |
+|---|---|---|---|
+| random | 0.645 | 0 / 25 | 21 / 25 |
+| scripted | 0.959 | **19 / 25** | **7 / 25** |
+
+Random action selection produces a clean monotone gradient across both axes
+(0.995 at the easiest configuration to 0.105 at the hardest). A merely
+competent policy does not: it wins 19 of 25 configurations outright, collapsing
+25 configurations into 7 distinguishable levels.
+
+The trained agent should exceed the scripted policy, and the human participant
+certainly will. Gate 2's Spearman correlation would then have been computed
+between two vectors that are approximately three-quarters ties — on the human
+side, potentially entirely tied. The project's central correspondence claim
+would have rested on a near-degenerate statistic.
+
+### Candidates evaluated
+
+Four quantities available from `EpisodeStats`, both floor policies, 120
+episodes per configuration. "Ratio" is the telegraph-axis effect divided by the
+gap-axis effect; 1.00 means the two difficulty axes contribute equally. ρ is
+Spearman against a monotone difficulty proxy.
+
+Competent (scripted) policy:
+
+| candidate | distinct | telegraph effect | gap effect | ratio | ρ |
+|---|---|---|---|---|---|
+| success rate | 7/25 | −0.130 | −0.192 | 0.68 | −0.195 |
+| **mean damage taken** | **22/25** | **44.16** | **43.86** | **1.01** | **+0.938** |
+| hit rate | 24/25 | 0.419 | −0.007 | −58.0 | +0.296 |
+| episode length | 25/25 | 4.81 | 65.82 | 0.07 | +0.651 |
+
+### Decision
+
+**Mean damage taken.** It is the only candidate that discriminates for a
+competent policy *and* responds to both difficulty axes. For the scripted
+policy the axes contribute 44.16 and 43.86 — a ratio of 1.01, the axis balance
+OPEN-02 was concerned with, achieved. It is also the quantity D026 calibrated
+the axes on, so this is consistency with an existing decision rather than a new
+invention, and it is recorded in `EpisodeStats` for human and agent alike,
+which is what §6's comparability argument requires.
+
+### Why hit rate was rejected
+
+Recorded because it was proposed first, and the reasoning that produced it was
+wrong in an instructive way.
+
+`damage ≈ attacks_faced × fraction_connecting`. Attack gap controls the first
+term mechanically; telegraph duration controls the second. Hit rate *is* the
+second term alone, which is exactly why D026 used it: to test whether telegraph
+was doing anything independent of gap.
+
+That property makes it useless here. A metric built to isolate one axis cannot
+represent two. The measurement confirms it: hit rate's gap-axis effect is
+**−0.007**, indistinguishable from zero. Adopting it would have made attack gap
+a dead axis — the OPEN-02 failure mode reintroduced through the metric rather
+than the environment, and invisible until Gate 2 produced a weak correlation
+for reasons nobody could locate.
+
+The general lesson, worth carrying into the report: a diagnostic designed to
+isolate a factor is the worst available choice for a measure that must
+represent all factors. It was caught only because the candidates were measured
+rather than argued about.
+
+### Consequences
+
+- Pre-registration §6 and §10 amended; §12 deviation logged, outcome data seen:
+  No.
+- Direction inverts: higher damage taken means harder, where higher success
+  rate meant easier. Expected correlation signs are stated per hypothesis.
+- Damage taken is effectively bounded by agent maximum health: the episode ends
+  at death, though the fatal blow may overshoot the bound (the random floor
+  records 106.65 at the hardest configuration). The fraction of episodes
+  reaching the bound is reported per configuration; above 25% the rank is
+  flagged unreliable.
+- Damage taken's status in §8 as an **exploratory** dependent variable is
+  unchanged. Ordering configurations and measuring whether the curriculum
+  helped are different roles; the primary dependent variable remains mean
+  normalized return on the held-out set.
+
+### Open, not decided here
+
+Conditions `PERF` and `BEHAV` are still defined in §4 by success rate — the
+agent's running per-configuration success rate, and human success rate with
+median reaction time. They face the same ceiling, and consistency argues they
+should follow this change. They are part of the **independent variable**, so
+changing them is a larger step than changing a gate's metric and is not made
+here. Resolve before Gate 2.
