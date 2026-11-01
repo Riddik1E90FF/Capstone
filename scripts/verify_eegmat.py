@@ -9,11 +9,21 @@ Two questions, in order of importance:
    depends on.  It is almost certainly a typo for *low-pass*, but "almost
    certainly" is not a basis for building a pipeline.
 
-2. **Does frontal theta rise from rest to task?**
-   Bonus, and more interesting.  EEGMAT recorded each subject at rest (_1) and
-   during mental arithmetic (_2).  If frontal theta is higher during the task,
-   that is the workload effect this project's whole index is built on, visible
-   in independent data before any of our own hardware is involved.
+2. **Does the pipeline reproduce a known physiological effect?**
+   NOTE (2026-11-01): this question originally asked whether frontal theta
+   rises from rest to task, as a check on the workload literature.  That was a
+   design error.  EEGMAT's rest recording is **eyes-closed** (Zyma et al. 2019;
+   180 s eyes-closed rest, 60 s eyes-open arithmetic), so rest and task differ
+   in eye state, arousal and visual input as well as in workload.  A theta
+   difference across that contrast is uninterpretable, and no amount of extra
+   subjects fixes it -- more data on a confounded design only narrows the
+   confidence interval around the wrong quantity.
+
+   What the contrast IS good for is a positive control on our own code.
+   Eyes-closed to eyes-open reliably *suppresses* alpha (the Berger effect,
+   1929).  If our loading, filtering and PSD code is correct, alpha must fall
+   from _1 to _2.  That validates the pipeline without claiming anything about
+   workload.
 
 Usage (from the repo root):
     python scripts/verify_eegmat.py
@@ -25,13 +35,17 @@ Downloads ~15 MB into data/raw/eegmat/ (gitignored) on first run.
 from __future__ import annotations
 
 import argparse
+import shutil
 import sys
 import urllib.request
 from pathlib import Path
 
 import numpy as np
 
-BASE_URL = "https://physionet.org/files/eegmat/1.0.0"
+# PhysioNet's /files/ endpoint 302-redirects to this S3 bucket and returns
+# HTTP 500 to urllib's default client.  Fetching the bucket directly is the
+# same published open-access data with one hop fewer.
+BASE_URL = "https://physionet-open.s3.amazonaws.com/eegmat/1.0.0"
 DATA_DIR = Path("data/raw/eegmat")
 
 # Canonical EEG bands.  The index in this project uses theta and alpha.
@@ -58,9 +72,17 @@ def download(subject: int) -> tuple[Path, Path] | None:
             url = f"{BASE_URL}/{name}"
             print(f"  downloading {name} ...", end="", flush=True)
             try:
-                urllib.request.urlretrieve(url, dest)
+                # An explicit User-Agent: some mirrors reject urllib's default.
+                req = urllib.request.Request(
+                    url, headers={"User-Agent": "capstone-eegmat-verify/1.0"})
+                with urllib.request.urlopen(req, timeout=120) as resp, \
+                        dest.open("wb") as fh:
+                    shutil.copyfileobj(resp, fh)
                 print(f" {dest.stat().st_size / 1e6:.1f} MB")
             except Exception as exc:
+                # Remove a truncated file, or the next run would skip the
+                # download and hand mne a corrupt EDF.
+                dest.unlink(missing_ok=True)
                 print(f" FAILED: {exc}")
                 return None
         paths.append(dest)
@@ -165,28 +187,46 @@ def main() -> int:
         print("  The filter description may be literal. This dataset would be")
         print("  unusable for a theta/alpha index. Find another one.")
 
-    # ------------- Question 2: does frontal theta rise with load? ------------
+    # ---- Question 2: positive control -- does alpha drop, as it must? -------
     print("\n" + "=" * 62)
-    print("QUESTION 2  Does frontal theta rise from rest to task?")
+    print("QUESTION 2  Does the pipeline reproduce a known effect?")
     print("=" * 62)
-    print("\n  (This is the effect the project's workload index is built on.)\n")
+    print("\n  EEGMAT rest is EYES-CLOSED, task is eyes-open (Zyma et al. 2019).")
+    print("  Eyes-closed -> eyes-open suppresses alpha (Berger, 1929). If our")
+    print("  loading/PSD/band code is right, alpha must FALL from _1 to _2.\n")
 
-    print(f"{'subject':>8} {'theta rest':>12} {'theta task':>12} {'change':>10}")
+    print(f"{'subject':>8} {'alpha rest':>12} {'alpha task':>12} {'change':>10}")
     print("-" * 46)
-    increases = 0
+    drops = 0
     for i, (r, t) in enumerate(zip(rest_rows, task_rows)):
-        pct = (t["theta"] - r["theta"]) / r["theta"] * 100 if r["theta"] else 0.0
-        arrow = "up" if pct > 0 else "down"
-        increases += pct > 0
-        print(f"{i:>8} {r['theta']:>12.4g} {t['theta']:>12.4g} {pct:>8.1f}% {arrow}")
+        pct = (t["alpha"] - r["alpha"]) / r["alpha"] * 100 if r["alpha"] else 0.0
+        drops += pct < 0
+        print(f"{i:>8} {r['alpha']:>12.4g} {t['alpha']:>12.4g} {pct:>8.1f}%"
+              f" {'down' if pct < 0 else 'up'}")
 
     n = len(rest_rows)
-    print(f"\n  theta increased in {increases}/{n} subjects")
-    if increases > n / 2:
-        print("  Consistent with the workload literature (Chikhi et al. 2022, theta g=0.68).")
+    print(f"\n  alpha fell in {drops}/{n} subjects")
+    if drops > n / 2:
+        print("  PASS - the expected direction. The pipeline reads real physiology.")
     else:
-        print("  Not the expected direction here. Small n; not alarming on its own,")
-        print("  but worth noting before relying on the theta term.")
+        print("  UNEXPECTED - alpha should fall. Suspect the loading, channel")
+        print("  selection or PSD code before suspecting the data.")
+
+    # ---- Theta, reported but NOT interpreted --------------------------------
+    print("\n" + "-" * 62)
+    print("  Theta, for the record only (NOT a workload test):")
+    print("-" * 62)
+    print(f"{'subject':>8} {'theta rest':>12} {'theta task':>12} {'change':>10}")
+    print("-" * 46)
+    for i, (r, t) in enumerate(zip(rest_rows, task_rows)):
+        pct = (t["theta"] - r["theta"]) / r["theta"] * 100 if r["theta"] else 0.0
+        print(f"{i:>8} {r['theta']:>12.4g} {t['theta']:>12.4g} {pct:>8.1f}%"
+              f" {'up' if pct > 0 else 'down'}")
+    print("\n  Rest is eyes-closed, so this contrast confounds workload with eye")
+    print("  state, arousal and visual input. Whichever way it points, it is")
+    print("  NOT evidence for or against the theta term of our index. The")
+    print("  workload validation has to come from a contrast where eye state is")
+    print("  held constant -- which our own combat configurations are.")
 
     print("\nDone. Record the outcome in docs/DECISIONS.md.")
     return 0

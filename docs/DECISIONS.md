@@ -524,6 +524,7 @@ gate. Re-running unchanged code with new seeds until it passes is not.
 |---|---|---|---|
 | 2026-10-20 | `531f33d` | L1 | PASS. All component tests (steps 1–6, and step 7a's `gradient_update` against the same calls made by hand). Loop composition against a stub env: `tests/test_train.py`, 34 tests. |
 | 2026-10-20 | `531f33d` | L2 | PASS, first run. `tests/test_l2_chain.py`: 3-state quit chain with a terminal action and a 4-step truncation, γ = 0.9. Q\* derived by hand by the user (S: 8.1 / 1, A: 9 / 0, B: 10 / 0), cross-checked by value iteration. Tolerance ±0.5 and config fixed before the first run. Seeds 1, 2, 3: max \|Q − Q\*\| = 0.001, 0.003, 0.001. Before this run, planted bugs in a scratch copy each failed by ≥ 4.5: masking on truncation, never storing `terminated`, storing the reset observation as s′, never syncing, wrong γ. |
+| 2026-10-30 | `1c0c0ed` | L3, L4 | **PASS, first attempt.** 10 NumPy-DQN runs (seeds 1-10, 500k steps, `runs/gate1a/numpy/`, all `completed`, clean tree at the calibration commit) against the 10 reference runs, with the calibration fixed beforehand. **L3:** 10 of 10 seeds reach T = 475 (need k = 8). **L4 steps:** median steps-to-T 268,244 vs reference 273,698 (allowed: 2 × = 547,395); 0 censored. **L4 final:** IQM final return 495.76 vs reference 497.85 (allowed: ≥ 483.44). `scripts/gate1a.py check`. **Gate 1a passed: L1-L4.** |
 
 Development smoke runs (not attempts, and not used for any calibration
 number): 2026-10-20, 50k-step CartPole-v1 and 20k-step `combat:12` runs to
@@ -595,3 +596,96 @@ to the provisional reward (OPEN-06), so it is recorded in pre-registration §12.
 because none of those episodes contain a mutual KO. No agent-training,
 human-session or experimental-condition data existed when it was made.
 Regression test: `tests/test_env.py::test_simultaneous_death_is_a_loss`.
+
+---
+
+## D032 — EEGMAT verification: usable, but its rest/task contrast is void
+
+**Status:** CONFIRMED (2026-11-01)
+
+`scripts/verify_eegmat.py`, 3 subjects, frontal channels (F3, F4, Fz),
+Welch PSD over 4-second windows, no preprocessing.
+
+**Question 1 — is there real power below 30 Hz? PASS.** Power below 30 Hz
+exceeds power above it by 41.3×. The PhysioNet page's "high-pass filter with a
+30 Hz cut-off frequency" is a typo for *low-pass*. The dataset retains theta
+and alpha and is usable for this project's index. This question is closed.
+
+**Question 2 — originally "does frontal theta rise from rest to task?" VOID BY
+DESIGN.** EEGMAT's rest recording is **eyes-closed** (Zyma et al. 2019: 180 s
+eyes-closed rest, 60 s eyes-open serial subtraction). Rest and task therefore
+differ in eye state, visual input and arousal as well as in workload, so a
+theta difference across that contrast cannot be attributed to cognitive load.
+
+The observed direction (theta rose in 1 of 3 subjects) is **not** evidence
+against the theta term of the index, and running the remaining 33 subjects
+would not make it so: the defect is bias, not variance. More observations on a
+confounded design narrow the confidence interval around the wrong quantity.
+Recorded explicitly because the opposite reading — "theta failed to replicate"
+— would have been a reason to weaken or abandon the primary term of the index.
+
+**Question 2 rewritten as a positive control.** Eyes-closed → eyes-open
+suppresses alpha (the Berger effect). Mean frontal alpha fell from 3.308e-11
+to 2.785e-11, −16%, the expected direction; the magnitude is modest because
+alpha is weakest frontally. This validates the loading, channel-selection and
+PSD code against real physiology without claiming anything about workload.
+
+**Consequence for the experiment.** Workload validation for the index must come
+from a contrast holding eye state constant. The 25 combat configurations do:
+the participant is eyes-open, visually engaged and performing the same task
+throughout, with only telegraph duration and attack gap varying. This is a
+cleaner workload manipulation than EEGMAT offers, and should be stated as such
+in the report.
+
+**Retained use.** EEGMAT remains the development fixture for the EEG pipeline:
+36 subjects of 21-channel, 500 Hz EDF for building and unit-testing loading,
+filtering, epoching, artifact detection and band extraction before any of our
+own recordings exist.
+
+**Reference:** Zyma, I., Tukaev, S., Seleznov, I., et al. (2019).
+Electroencephalograms during Mental Arithmetic Task Performance. *Data*,
+4(1), 14.
+
+---
+
+## D033 — Pin the numerical environment; re-prove Gate 1a on NumPy 2.x
+
+**Status:** DECIDED (2026-11-01); verification PENDING
+
+**What happened.** Installing `mne` for D032 upgraded NumPy in the Anaconda
+base environment from 1.26.4 to 2.5.4. Gate 1a passed under 1.26.4
+(`runs/gate1a/numpy/*/meta.json`), so the environment that produced the passing
+gate no longer exists. The drift was detected only because
+`experiment/manifest.py` writes Python, NumPy and platform into every run.
+
+**Why it matters.** The agent is implemented in NumPy, so NumPy is a dependency
+of the numerical results, not merely of the tooling. Reduction and BLAS paths
+changed between 1.26 and 2.5, and NumPy 2.0 removed a number of aliases, so
+results are not guaranteed bit-identical and code may change behaviour silently.
+`np.random.default_rng` (PCG64) is stream-stable across versions by documented
+policy, so seeded action sequences are unaffected.
+
+**Decision.** Adopt NumPy 2.x as the project version rather than reverting.
+Reverting would restore a version that nothing else in the toolchain now wants,
+and the gate is cheap to re-prove: the ten 500k-step CartPole seeds complete in
+parallel in 3.6 minutes. Re-running converts an accidental drift into a
+deliberate, reportable result — the gate holds across a major version bump.
+
+**Procedure.**
+
+1. Commit the working tree so `meta.json` records a real commit.
+2. Re-run the ten NumPy-DQN seeds under 2.5.4 into `runs/gate1a/numpy_np2/`.
+3. Re-run `scripts/gate1a.py check` against the **unchanged** calibration in
+   `docs/gate1a_calibration.json`. The calibration is not recomputed: it was
+   fixed before any outcome data and stays fixed. This is a second attempt
+   against the same thresholds, not a new gate.
+4. Append the attempt to D029's table with its date and commit.
+5. `python -m pip freeze > requirements-lock.txt` from the environment that
+   produced the passing runs, and commit it.
+
+**If attempt 2 fails,** that is a real finding and is recorded as such. It would
+mean the DQN depends on NumPy 1.x numerical behaviour, which is itself worth
+knowing before the combat experiments. It is not a licence to revert and
+pretend the first pass still stands.
+
+**Verification result:** PENDING — append here with its date.

@@ -318,16 +318,16 @@ Read before doing anything substantive:
   `scripts/run_cleanrl_reference.py` (run + log conversion). The 10
   reference runs (seeds 1-10) completed 2026-10-20 in
   `runs/gate1a/cleanrl/`.
-- `scripts/gate1a.py`: calibration and L3/L4 check functions (user),
-  passing `tests/test_gate1a.py`. Metric definitions and bootstrap draw
-  order recorded in D029.
+- `scripts/gate1a.py`: calibration and L3/L4 check (user; reporting
+  helpers by Claude). Calibration committed at `1c0c0ed` before any full
+  NumPy-DQN run: T = 475, k = 8, F = 2, δ = 14.4008.
+- **Gate 1a PASSED 2026-10-30 (L1-L4)**, first attempt. The NumPy DQN tracks
+  CleanRL on CartPole-v1 over 10 seeds. Attempt log in D029; runs in
+  `runs/gate1a/numpy/`. The DQN may now be used on the combat environment.
 
 ### What does not exist yet
 
-- `scripts/gate1a.py` plumbing (`find_runs`, `load_episodes`, `main`; user).
-  Then calibrate on the reference runs, record T/k/F/δ in D029 and commit
-  **before** any full NumPy-DQN CartPole run, then the 10 NumPy-DQN runs
-  and the L3/L4 check. Comparison plots are not written yet.
+- Gate 1a comparison plots (learning curves, NumPy vs CleanRL), for the report.
 - The curriculum sampler.
 - The EEG pipeline.
 

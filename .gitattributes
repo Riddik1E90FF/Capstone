@@ -1,3 +1,10 @@
+# Normalize line endings for all text files.  Without this, markdown and
+# Python edited on Windows commits as CRLF and every later diff shows the
+# whole file as changed, which destroys git history as evidence of when a
+# decision was made.  Declared BEFORE the third_party rule below, which
+# overrides it (later rules win).
+* text=auto
+
 # Vendored reference code must stay byte-identical to upstream (D029,
 # third_party/cleanrl/README.md).  No line-ending conversion.
 third_party/cleanrl/** -text
