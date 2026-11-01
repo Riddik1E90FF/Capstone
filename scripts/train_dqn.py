@@ -42,6 +42,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
+import numpy as np
+
 # Scripts run as `python scripts/train_dqn.py` get scripts/ on sys.path, not
 # the repo root, so the packages next to it would not be importable.
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -58,10 +60,118 @@ from dqn.runlog import RunLogger  # noqa: E402
 EnvFactory = Callable[[int | None], Any]
 
 
+# Distinguishes the configuration-selection stream from every environment
+# stream, so the two cannot accidentally coincide for some seed.
+_SELECTOR_DOMAIN = 0x6D6978          # "mix"
+
+
+class _MixtureEnv:
+    """Uniform mixture over all 25 configurations, drawn per episode.
+
+    The selection has to happen in ``reset``, not in the factory.  ``train``
+    calls ``env_fn`` exactly once per run and then advances episodes with bare
+    ``env.reset()`` calls, so a factory that picked a configuration and
+    returned a fixed environment would train every episode on one cell and
+    produce a difficulty sweep that looked flat for no visible reason.
+
+    This is also the seam the curriculum sampler replaces later: everything
+    outside ``_draw_config`` stays the same when uniform sampling becomes
+    competence-tracked frontier sampling.  Nothing here is privileged
+    information: the configuration never enters the observation, so the agent
+    sees only the 18-dim vector and cannot condition on which cell it is in.
+
+    One environment is kept per configuration and reused, so each cell's own
+    RNG carries on across the episodes it appears in.  That matches the
+    single-configuration path, where ``train`` resets the same environment
+    without a seed.
+    """
+
+    def __init__(self, seed: int | None) -> None:
+        from combat_env import N_CONFIGS
+
+        self._n_configs = N_CONFIGS
+        self._rng = self._selector_rng(seed)
+        self._envs: dict[int, Any] = {}
+        self._env: Any = None
+        self._config_id: int | None = None
+
+    @staticmethod
+    def _selector_rng(seed: int | None) -> np.random.Generator:
+        """A stream of its own, derived from but distinct from the run seed."""
+        if seed is None:
+            return np.random.default_rng()
+        return np.random.default_rng([int(seed), _SELECTOR_DOMAIN])
+
+    @property
+    def config_id(self) -> int | None:
+        """Which configuration the current episode is running."""
+        return self._config_id
+
+    def _draw_config(self) -> int:
+        """Uniform over all configurations.  The curriculum sampler goes here."""
+        return int(self._rng.integers(self._n_configs))
+
+    def reset(self, seed: int | None = None, **kwargs: Any) -> tuple[Any, dict]:
+        from combat_env import make_env
+
+        if seed is not None:
+            # A seeded reset restarts the whole mixture deterministically,
+            # including the per-configuration environments, so the same seed
+            # always replays the same sequence of cells.
+            self._rng = self._selector_rng(seed)
+            self._envs.clear()
+
+        cid = self._draw_config()
+        self._config_id = cid
+
+        env = self._envs.get(cid)
+        if env is None:
+            cell_seed = int(self._rng.integers(1 << 31))
+            env = make_env(cid, seed=cell_seed)
+            self._envs[cid] = env
+            obs, info = env.reset(seed=cell_seed, **kwargs)
+        else:
+            # No seed: this cell's RNG carries on, as in the single-config path.
+            obs, info = env.reset(**kwargs)
+
+        self._env = env
+        info = dict(info)
+        info["config_id"] = cid
+        return obs, info
+
+    def step(self, action: int):
+        if self._env is None:
+            raise RuntimeError("reset() must be called before step()")
+        return self._env.step(action)
+
+    def __getattr__(self, name: str) -> Any:
+        # Anything not defined here belongs to the configuration currently in
+        # play.  Guarded on the private names so lookups during __init__,
+        # before _env exists, raise AttributeError rather than recursing.
+        if name.startswith("_"):
+            raise AttributeError(name)
+        env = self.__dict__.get("_env")
+        if env is None:
+            raise AttributeError(
+                f"{name!r} is unavailable until reset() has chosen a configuration")
+        return getattr(env, name)
+
+    def __repr__(self) -> str:  # pragma: no cover - display only
+        return f"_MixtureEnv(config_id={self._config_id})"
+
+
+def _mixture_factory() -> EnvFactory:
+    """EnvFactory for ``combat:mix``: same (seed) -> env shape as a single cell."""
+    return lambda seed: _MixtureEnv(seed)
+
+
 def make_env_factory(env_id: str) -> tuple[EnvFactory, int, int]:
     """Return (factory, obs_dim, n_actions) for `env_id`."""
     if env_id.startswith("combat:"):
         from combat_env import N_ACTIONS, N_CONFIGS, OBS_DIM, make_env
+
+        if env_id == "combat:mix":
+            return _mixture_factory(), OBS_DIM, N_ACTIONS
 
         try:
             config_id = int(env_id.split(":", 1)[1])
@@ -70,8 +180,7 @@ def make_env_factory(env_id: str) -> tuple[EnvFactory, int, int]:
         if not 0 <= config_id < N_CONFIGS:
             raise SystemExit(f"combat config id must be in 0..{N_CONFIGS - 1}, got {config_id}")
         return (lambda seed: make_env(config_id, seed=seed)), OBS_DIM, N_ACTIONS
-    if env_id == "combat:mix":
-        return _mixture_factory(), OBS_DIM, N_ACTIONS
+
 
     # Anything else is treated as a Gymnasium id.  Imported here, not at the
     # top, so combat-env runs do not need Gymnasium installed at all.
