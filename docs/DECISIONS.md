@@ -702,6 +702,17 @@ checking, and worth reporting: the claim is now measured rather than assumed.
 Any future NumPy change repeats this procedure rather than assuming the result
 carries over.
 
+**Scope of the bit-identical claim, recorded 2026-11-02.** It is
+*platform*-scoped, not absolute. Both attempts ran on Windows 11 with Python
+3.12.4; across those, NumPy 1.26.4 and 2.5.4 gave byte-identical episode logs.
+A later regeneration of the same ten seeds on Linux under NumPy 2.5.4 did
+**not** reproduce them: median steps-to-threshold 278,691 against the recorded
+268,244, and final-return IQM 495.73 against 495.76. Gate 1a still passes on
+all three criteria there, so the *gate* is robust across platforms; the
+*trajectories* are not. Different BLAS and libm implementations are the
+expected cause. Any figure or number must therefore state which platform
+produced it, and the October runs remain the recorded evidence.
+
 ---
 
 ## D034 — Gate 1: operational criteria
@@ -838,9 +849,33 @@ included.
   per-configuration grid is monotone in both axes with one minor inversion
   between telegraph levels 0.66 and 0.42. Easiest cell is configuration 0
   (20.04), hardest is 24 (62.29), spread 42.24. Spearman against a monotone
-  difficulty proxy is **+0.915**, against the random floor's ordering **+0.958**,
-  against the scripted floor's **+0.898**. Three measurement systems agreeing
+  difficulty proxy is **+0.952**, against the random floor's ordering **+0.959**,
+  against the scripted floor's **+0.897**. Three measurement systems agreeing
   this closely is the ordering property Gate 2 depends on.
+
+  *Proxy definition, recorded 2026-11-02 (it was quoted here before it was
+  defined, which made the number unreproducible):* the monotone difficulty
+  proxy is `telegraph_level + gap_level`, i.e. `(config_id // 5) + (config_id % 5)`,
+  higher meaning harder. It is an ordering only, with no claim that difficulty
+  is additive in the two axis levels; it exists to check that the measured
+  orderings run the direction the grid was built to run.
+
+  *Correction, 2026-11-02.* This entry first recorded the proxy correlation as
+  **+0.915**. That value came from an ad-hoc rank function that assigned ranks
+  by `argsort` order without mid-ranks for ties. The proxy is a sum of two
+  integers in 0–4, so it is heavily tied — five configurations share each
+  interior value — and arbitrary tie-breaking depressed the correlation. With
+  proper mid-ranks the value is **+0.952**. The two floor correlations were
+  never affected, because mean damage taken is continuous and untied: random
+  **+0.9585**, scripted **+0.8967** (previously rounded here as +0.898).
+
+  **This is a project-wide hazard, not a local typo.** §6 reduces all three
+  measurement systems to rank and compares them by Spearman correlation, so
+  every gate from here runs on exactly this computation. The EEG index, the
+  human rankings and any ordering with repeated values are all tie-prone. Rank
+  correlation used anywhere in this project must use mid-ranks —
+  `scipy.stats.spearmanr` does; a hand-rolled `argsort(argsort(x))` does not.
+  Found by the figure-generation agent when it could not reproduce the number.
 - *Axis balance for the trained agent* is 17.26 (telegraph) against 21.69 (gap),
   ratio 0.80. Both axes live, gap somewhat stronger — less balanced than the
   scripted floor's 1.01 but acceptable.
