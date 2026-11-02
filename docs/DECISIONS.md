@@ -825,7 +825,46 @@ bound), the scripted floor flags configurations 19, 24
 agent should saturate less, but if these configurations stay flagged their
 ranks are treated as unreliable in the Gate 2 correlation rather than silently
 included.
-**Attempts:** PENDING — one row per attempt, as in D029.
+**Attempts:**
+
+| Date | Commit | Levels | Result |
+|---|---|---|---|
+| 2026-11-01 | `1287319` | G1-a, G1-b | **PASS, first attempt.** 10 seeds, `combat:mix`, 500k steps, `runs/gate1/mix/`. **G1-a:** 10 of 10 seeds under the threshold of 60.3897; seed means 24.017–46.447. 8 of 10 also beat the scripted floor (46.13), which was context rather than a criterion. **G1-b:** PASS, 10 ≥ k = 8. Win rates 0.966–1.000, confirming D035: success rate would have been at ceiling and useless for ranking. Saturation flags only configuration 24, and only for seed 2 — fewer than the scripted floor's two flagged cells, so the agent dies less than the hand-written policy. `scripts/gate1_check.py`, results in `docs/gate1_result.json`. |
+| | | G1-c | PENDING — permutation null not yet implemented. **Gate 1 is not passed until G1-c is decided.** |
+
+**Diagnostics from the attempt** (descriptive, not criteria):
+
+- *Pooled difficulty ordering is clean.* Averaged over the 10 seeds, the
+  per-configuration grid is monotone in both axes with one minor inversion
+  between telegraph levels 0.66 and 0.42. Easiest cell is configuration 0
+  (20.04), hardest is 24 (62.29), spread 42.24. Spearman against a monotone
+  difficulty proxy is **+0.915**, against the random floor's ordering **+0.958**,
+  against the scripted floor's **+0.898**. Three measurement systems agreeing
+  this closely is the ordering property Gate 2 depends on.
+- *Axis balance for the trained agent* is 17.26 (telegraph) against 21.69 (gap),
+  ratio 0.80. Both axes live, gap somewhat stronger — less balanced than the
+  scripted floor's 1.01 but acceptable.
+- *Single-seed rankings are noisy.* Pairwise Spearman between seeds'
+  per-configuration orderings averages **+0.725** but ranges down to **+0.251**.
+  The pooled ordering is clean; an individual seed's is not. **Gate 2 must use
+  the ordering pooled across seeds**, and that has to be stated in §6 before
+  the human session, not chosen afterwards. See the open item below.
+
+### Open after this attempt
+
+1. **G1-c** is unimplemented, so the gate is undecided.
+2. **The Stage-2 amendment was not produced by this attempt.** §0 requires the
+   variance estimate in units of the *primary* dependent variable — mean
+   normalized return on the held-out configuration set (§8). What these runs
+   measured is between-seed variance in mean damage taken, the *difficulty*
+   metric: SD 8.344 on a mean of 36.250, a coefficient of variation of 23.0%.
+   Informative, but not the required quantity. Two gaps block it:
+   §5.2 reserves five of 25 configurations for generalization but **does not say
+   which five**, and §8's "normalized return" is **never defined**. Both must be
+   fixed before baseline runs can yield the Stage-2 number — and `combat:mix`
+   samples all 25 uniformly, so those runs would have to exclude the held-out
+   cells to measure held-out performance at all.
+3. **Pooling rule for the Gate 2 agent ordering** is not stated in §6.
 
 
 ---
