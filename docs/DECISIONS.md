@@ -705,13 +705,36 @@ carries over.
 **Scope of the bit-identical claim, recorded 2026-11-02.** It is
 *platform*-scoped, not absolute. Both attempts ran on Windows 11 with Python
 3.12.4; across those, NumPy 1.26.4 and 2.5.4 gave byte-identical episode logs.
-A later regeneration of the same ten seeds on Linux under NumPy 2.5.4 did
-**not** reproduce them: median steps-to-threshold 278,691 against the recorded
-268,244, and final-return IQM 495.73 against 495.76. Gate 1a still passes on
-all three criteria there, so the *gate* is robust across platforms; the
-*trajectories* are not. Different BLAS and libm implementations are the
-expected cause. Any figure or number must therefore state which platform
-produced it, and the October runs remain the recorded evidence.
+A later regeneration of the same ten CartPole seeds on Linux under NumPy 2.5.4
+did **not** reproduce them: median steps-to-threshold 278,691 against the
+recorded 268,244, and final-return IQM 495.73 against 495.76. Gate 1a still
+passes on all three criteria there, so the *gate* is robust to whatever changed;
+the CartPole trajectories are not.
+
+**The cause is NOT established, and this entry previously asserted one.** It
+attributed the difference to platform-level BLAS and libm differences. That is
+unverified, and evidence since then cuts against it: a `combat:mix` seed-3 run
+regenerated on Linux reproduced its Windows `episodes.jsonl` **byte for byte**
+once CRLF line endings were normalised. So combat trajectories *are* stable
+across these two platforms. The CartPole path differs in that it goes through
+Gymnasium, whose version was not matched in the regeneration, and the reference
+side additionally ran a different PyTorch. Either is a sufficient explanation
+and neither has been tested. Recorded as **unexplained**; the October runs
+remain the evidence of record, and any figure must state which environment
+produced it.
+
+**A verified reproducibility gap, separate from the above.**
+`scripts/run_cleanrl_reference.py` pins `OMP_NUM_THREADS=1` and
+`MKL_NUM_THREADS=1` and records them in its run metadata.
+`scripts/train_dqn.py` does neither. All ten Gate 1 runs were launched within
+0.16 s of each other, so each process took whatever thread count OpenBLAS chose
+under contention, unpinned and unrecorded. Evaluation was tested and is **not**
+thread-sensitive — the same checkpoint scored an identical per-configuration
+vector under 1 and 8 threads — so no recorded number is known to be affected.
+The asymmetry should still be closed: pin and record the thread environment in
+`train_dqn.py` as the reference runner already does. It costs nothing and
+removes a class of doubt that is expensive to rule out after the fact, as this
+investigation showed.
 
 ---
 
