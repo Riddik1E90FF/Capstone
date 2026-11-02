@@ -65,6 +65,7 @@ matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.ticker import FuncFormatter
 
 import gate1a  # scripts/gate1a.py: the D029 metric definitions
 
@@ -338,6 +339,17 @@ def save(fig: plt.Figure, out_dir: Path, stem: str, formats: Sequence[str]) -> l
         written.append(path)
     plt.close(fig)
     return written
+
+
+def thousands(value: float, _pos: int | None = None) -> str:
+    """Tick label in thousands of steps: 0, 100k, 200k ...
+
+    Preferred over Matplotlib's scientific-notation offset, which it parks in
+    the corner where it collides with the axis label.
+    """
+    if value == 0:
+        return "0"
+    return f"{value / 1000:,.0f}k"
 
 
 def axis_ticks(ax: plt.Axes) -> None:
@@ -653,13 +665,13 @@ def figure_gate1a_curves(runs_root: Path, calibration: dict[str, Any],
                label=f"Gate 1a threshold T = {threshold:.0f}")
     ax.set_xlim(0, total)
     ax.set_xlabel("environment steps")
+    ax.xaxis.set_major_formatter(FuncFormatter(thousands))
     ax.set_ylabel("episodic return (CartPole-v1)")
     ax.set_title("A  Training return, interquartile mean over 10 seeds with 95% stratified "
                  "bootstrap interval", loc="left", fontsize=9)
     ax.grid(True, lw=0.5, alpha=0.6)
     ax.set_axisbelow(True)
     ax.legend(loc="lower right")
-    ax.ticklabel_format(axis="x", style="sci", scilimits=(0, 0))
 
     # Panel B: steps-to-threshold per seed, with the medians and the F x rule.
     axb = fig.add_subplot(gs[1, 0])
@@ -690,7 +702,7 @@ def figure_gate1a_curves(runs_root: Path, calibration: dict[str, Any],
     axb.grid(True, axis="x", lw=0.5, alpha=0.6)
     axb.set_axisbelow(True)
     axb.tick_params(axis="y", length=0)
-    axb.ticklabel_format(axis="x", style="sci", scilimits=(0, 0))
+    axb.xaxis.set_major_formatter(FuncFormatter(thousands))
 
     # Panel C: final return per seed, the IQMs, and the non-inferiority margin.
     axc = fig.add_subplot(gs[1, 1])
