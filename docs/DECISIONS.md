@@ -866,6 +866,38 @@ included.
    cells to measure held-out performance at all.
 3. **Pooling rule for the Gate 2 agent ordering** is not stated in §6.
 
+### Hyperparameter sensitivity: decision rule, fixed 2026-11-01 before the sweep
+
+The Gate 1 agents ran on `DQNConfig` defaults, which were tuned for CartPole.
+`buffer_size = 10000` at roughly 142 steps per combat episode holds about 70
+episodes — tight for a non-stationary mixture over 25 configurations. A
+needlessly weak agent is not a Gate 1 problem (G1-a passed on all ten seeds)
+but it is an experiment problem: an agent near the floor of its capacity may
+mask real differences between curriculum conditions and cost power on H1
+directly.
+
+A sensitivity sweep is therefore run over `buffer_size`, `learning_rate` and
+`train_frequency`, 3 seeds per setting, on `combat:mix`. This is baseline data,
+not experimental-condition data, so it does not compromise the
+pre-registration. To keep it from becoming a search for a better-looking Gate 1
+result, the rule is fixed here **before the sweep runs**:
+
+1. The outcome of interest is **mean damage taken**, the same quantity Gate 1
+   uses, averaged over the 3 seeds for each setting.
+2. A setting replaces the current defaults only if it improves the mean by
+   **more than 8.344** — one between-seed standard deviation from the Gate 1
+   attempt. Smaller differences are inside seed noise and are not acted on.
+3. If more than one setting clears that bar, the one with the **smallest**
+   change from the current defaults is adopted, not the best-scoring one.
+4. Whatever is adopted, **Gate 1 is re-run in full as a new attempt** under the
+   new settings and must pass again on its own. The existing attempt is not
+   retroactively reinterpreted.
+5. If nothing clears the bar, the CartPole defaults stand and that is recorded
+   as a result: the agent is not hyperparameter-limited on this environment.
+
+The sweep may not change the environment, the reward, the evaluation protocol,
+or anything in the pre-registration.
+
 
 ---
 
