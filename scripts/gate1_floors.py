@@ -1,7 +1,7 @@
 """Measure the Gate 1 floors (D034), before any combat training run.
 
 Two floors, both on all 25 configurations with the protocol fixed in
-``experiment/gate1.py``:
+``evaluation/gate1.py``:
 
   random    uniform random action selection.  This is the one G1-a compares
             against: a seed passes only if its mean damage taken is at most
@@ -51,7 +51,7 @@ import numpy as np
 
 from combat_env import N_ACTIONS
 from combat_env.config import DifficultyConfig
-from experiment.gate1 import (
+from evaluation.gate1 import (
     CONFIG_IDS, EVAL_SEED_BASE, N_EVAL, evaluate_policy, random_policy,
 )
 

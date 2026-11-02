@@ -715,6 +715,15 @@ yet testable. This entry fixes the measurement and the thresholds **before any
 combat training run**, for the same reason D029 did for Gate 1a: a threshold
 chosen after seeing the outcome is not a threshold.
 
+### Where the code lives
+
+The shared measurement protocol is `evaluation/gate1.py`; the floor CLI is
+`scripts/gate1_floors.py`. It is deliberately **not** in `experiment/`, which
+is stdlib-only by invariant (`tests/test_manifest.py::test_experiment_package_
+imports_stdlib_only`) so a run manifest stays readable without NumPy or the
+environment. Measuring the environment requires both, so it lives beside that
+package rather than inside it.
+
 ### What the baseline agent is
 
 One DQN trained on a **uniform random mixture of all 25 configurations** — a
