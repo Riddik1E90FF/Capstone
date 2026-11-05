@@ -17,3 +17,9 @@ tensorboard
 
 # Property-based tests for combat_env (tests/test_env_properties.py).
 hypothesis>=6.100
+
+# EDF reading and montage lookup for the EEG pipeline.  eeg/loading.py imports
+# it lazily inside the functions that need it and raises a clear LoadError if
+# it is absent, so it is optional at runtime but required to work with EEGMAT
+# or any EDF recording (E-25).
+mne>=1.6

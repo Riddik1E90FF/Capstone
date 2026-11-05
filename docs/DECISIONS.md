@@ -698,7 +698,23 @@ that reduction or BLAS changes between 1.26 and 2.5 might perturb results —
 did not materialise at this network size and dtype. It was still worth
 checking, and worth reporting: the claim is now measured rather than assumed.
 
-`requirements-lock.txt` pins the environment that produced the passing runs.
+`requirements-lock.txt` records the versions that produced the passing runs.
+
+**Correction, 2026-11-05.** This entry originally claimed that file pinned the
+environment. It did not. It held the output of `pip freeze` run in the Anaconda
+*base* environment: 436 unrelated packages in UTF-16, none of them the
+project's, pinning nothing that mattered. The command that produced it was
+suggested without checking that it was being run inside a project-only virtual
+environment, and the result was committed unread. Replaced with an explicit,
+readable pin of the direct dependencies, labelled as not being a transitive
+lock.
+
+The authoritative provenance was never this file: `experiment/manifest.py`
+writes the interpreter, NumPy version, platform and git commit into every run's
+metadata, which is how the NumPy drift in this entry was detected in the first
+place. A lock file records intent; the run metadata records fact, and only the
+second one can be wrong in a way that shows up.
+
 Any future NumPy change repeats this procedure rather than assuming the result
 carries over.
 
