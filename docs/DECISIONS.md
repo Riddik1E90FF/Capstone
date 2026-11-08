@@ -880,7 +880,8 @@ included.
 | Date | Commit | Levels | Result |
 |---|---|---|---|
 | 2026-11-01 | `1287319` | G1-a, G1-b | **PASS, first attempt.** 10 seeds, `combat:mix`, 500k steps, `runs/gate1/mix/`. **G1-a:** 10 of 10 seeds under the threshold of 60.3897; seed means 24.017–46.447. 8 of 10 also beat the scripted floor (46.13), which was context rather than a criterion. **G1-b:** PASS, 10 ≥ k = 8. Win rates 0.966–1.000, confirming D035: success rate would have been at ceiling and useless for ranking. Saturation flags only configuration 24, and only for seed 2 — fewer than the scripted floor's two flagged cells, so the agent dies less than the hand-written policy. `scripts/gate1_check.py`, results in `docs/gate1_result.json`. |
-| | | G1-c | PENDING — permutation null not yet implemented. **Gate 1 is not passed until G1-c is decided.** |
+| 2026-11-07 | `caf62bf` | G1-c | **PASS.** Observed spread in per-configuration mean damage taken, pooled across the 10 passing seeds, is **42.242**, against a 95th percentile of **2.337** from the configuration-label permutation null (10,000 permutations, seed 0). An 18x margin: the ordering across the 25 configurations is not something label noise can manufacture. `spread_permutation_null` in `scripts/gate1_check.py`, tested in `tests/test_gate1_check.py`. |
+| | | **GATE 1** | **PASSED — G1-a, G1-b and G1-c all satisfied.** The learning problem works, reproducibly, with an ordered difficulty structure. The EEG half may now proceed against a validated environment. |
 
 **Diagnostics from the attempt** (descriptive, not criteria):
 
@@ -926,8 +927,12 @@ included.
 
 ### Open after this attempt
 
-1. **G1-c** is unimplemented, so the gate is undecided.
-2. **The Stage-2 amendment was not produced by this attempt.** §0 requires the
+*Item 1 closed 2026-11-07: G1-c implemented, run, and passed. Gate 1 is decided.*
+
+1. ~~**G1-c** is unimplemented, so the gate is undecided.~~ **CLOSED 2026-11-07.**
+2. **The Stage-2 amendment was not produced by this attempt**, and is now the
+   binding blocker: Gate 1 has passed, so the amendment is due, and it cannot be
+   written until the two definitions below exist. §0 requires the
    variance estimate in units of the *primary* dependent variable — mean
    normalized return on the held-out configuration set (§8). What these runs
    measured is between-seed variance in mean damage taken, the *difficulty*
