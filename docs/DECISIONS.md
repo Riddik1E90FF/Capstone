@@ -1183,8 +1183,9 @@ log it. Without it, `BEHAV` cannot be computed from the session.
 
 ## D038 — Held-out split: random transversal, corners excluded
 
-**Status:** CONFIRMED (2026-11-12) for the rule. The draw is PENDING: it runs
-after the rule and seed are committed.
+**Status:** CONFIRMED (2026-11-12). **Drawn 2026-11-12** from a clean tree at
+`49891eb`, the commit that fixed the rule and seed. Index 76 of 78.
+**Held out: 4, 8, 12, 15, 21.** The record is `docs/heldout_split.json`.
 
 **Rule.**
 1. The held-out set is one configuration per telegraph level and one per gap
