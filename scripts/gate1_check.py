@@ -75,14 +75,14 @@ def find_runs(root: Path) -> dict[int, Path]:
 
 def spread_permutation_null(outcomes, n_permutations=N_PERMUTATIONS,
                             seed=PERMUTATION_SEED):
-    """G1-c null distribution.  **Not yet implemented — this is yours.**
+    """G1-c null distribution.  Tested in tests/test_gate1_check.py.
 
     Specification, fixed by D034 and not to be adjusted after seeing the
     observed value:
 
-      `outcomes` is {config_id: [damage_taken, ...]}, one list of N_EVAL
-      episode values per configuration, pooled across the seeds that passed
-      G1-a.
+      `outcomes` is {config_id: [damage_taken, ...]}, one list per
+      configuration of N_EVAL episode values from each seed that passed
+      G1-a (so N_EVAL x passing seeds values).
 
       One permutation:
         1. Pool every episode value across all configurations into one array.
@@ -102,9 +102,32 @@ def spread_permutation_null(outcomes, n_permutations=N_PERMUTATIONS,
     and give a null that is far too narrow, so almost any spread would clear
     it and G1-c would pass regardless of whether the ordering is real.
     """
-    raise NotImplementedError(
-        "G1-c permutation null is not implemented. See the docstring for the "
-        "specification fixed in D034.")
+    rng = np.random.default_rng(seed)
+    
+    # 1. Remember original group sizes
+    sizes = [len(episodes) for episodes in outcomes.values()]
+    
+    # 2. Pool all episode outcomes
+    pooled = np.concatenate([np.asarray(v, dtype=float) for v in outcomes.values()])
+    
+    # 3. Prepare output array
+    cuts = np.cumsum(sizes)[:-1]    
+    spreads = np.empty(n_permutations)    
+    
+    for i in range(n_permutations):
+
+        # 4. Shuffle pooled episode values
+        shuffled = rng.permutation(pooled)
+
+        # 5. Calculate Split Positions
+        groups = np.split(shuffled, cuts)
+        
+        # 6. Calculate each group's mean
+        means = [np.mean(g) for g in groups]
+
+        # 7. Record max - min
+        spreads[i] = max(means) - min(means)
+    return spreads
 
 
 def main() -> int:
@@ -114,7 +137,7 @@ def main() -> int:
     ap.add_argument("--out", type=Path, default=Path("docs/gate1_result.json"))
     ap.add_argument("--n-eval", type=int, default=N_EVAL)
     ap.add_argument("--skip-g1c", action="store_true",
-                    help="report G1-a and G1-b only, while G1-c is unimplemented")
+                    help="report G1-a and G1-b only; the gate is left undecided")
     args = ap.parse_args()
 
     if not args.floors.exists():
