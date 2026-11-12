@@ -1385,9 +1385,11 @@ held-out cell.
 
 ## D041 — Stage-2 amendment: 40 seeds per condition
 
-**Status:** CONFIRMED (2026-11-12, Ryan). Seed count and smallest effect
-size of interest together, as the single amendment §0 calls for, committed
-in one commit. This completes the Stage-2 lock.
+**Status:** CONFIRMED (2026-11-12, Ryan). **Revised the same day**, before
+the `prereg-v2.0` tag. The smallest effect of interest stays at 0.07, but it
+is now fixed first, and the seed count is derived from it by simulation
+(floor 40). See "Revision" at the end of this entry. The text below the
+revision note records what `55d14b7` committed.
 
 **Decision.** 40 seeds per condition, 280 runs over the seven conditions,
 replacing §9's Stage-1 target of "≥10 per condition, ~70 runs". The same 40
@@ -1436,10 +1438,36 @@ statement, recorded verbatim in pre-registration §9:
   benchmarks. That is supervised learning, not RL, so it supports
   "plausible", not more.
 
-**Open: the seed numbers.** They must be fixed before any condition run, so
-they cannot be chosen after the fact.
+**Seed numbers (Ryan, 2026-11-12):** 1001 to 1000 + N, the same in every
+condition.
 
 **Caveat.** 0.093 is the spread under uniform sampling. `STATIC` and the
 curriculum conditions may vary more between seeds. Forty seeds leaves margin
 for that.
+
+**Revision, 2026-11-12 (Ryan), before the Stage-2 tag.** The structural
+problem: the committed statement set 0.07 as "equal to the detection limit at
+40 seeds", so the effect of interest was a by-product of the seed budget. Now:
+
+- **0.07 is fixed on its own.** The "equal to the detection limit" clause is
+  removed from §9.
+- **The seed count follows from it.** N is the smallest multiple of 10, and
+  at least 40, at which the registered test achieves ≥ 80% power to detect
+  0.07, determined by simulation before any condition run.
+- **The simulation is fixed before it is run** (Ryan's choices):
+  - α = .05/6 ≈ .0083, one-sided: the first Holm step, so the power holds
+    for every contrast in the family.
+  - Each group's values are resampled with replacement from the ten Stage-2
+    per-seed DVs, and 0.07 is added to one group. This keeps the
+    environment's real shape, including seed 103's low value, which is where
+    the IQM's robustness matters. Limitation: only ten distinct values.
+  - 2,000 simulated experiments per candidate N, with 2,000 permutations
+    each and `default_rng(0)`. That gives a Monte Carlo SE of power of about
+    0.009 near 0.8.
+  - Candidate N = 40, 50, 60, …, in order.
+  - Test statistic: the difference of 25%-trimmed means. p = (1 + count of
+    permuted values ≥ observed) / (1 + permutations).
+- **Who writes it.** The simulation is a statistical test, so Ryan writes the
+  core and Claude writes the harness and tests. Its result and N are
+  recorded here, committed, before the condition launcher runs.
 

@@ -375,26 +375,42 @@ index performance against labels, index response to the artifact-control block.
 **Unit of analysis.** One completed training run (one seed × one condition). Runs
 are independent.
 
-**Seeds.** **40 per condition, 280 runs** (Stage-2 amendment, 2026-11-12; §12).
-The same 40 seeds are used in every condition. Seeds 101–110 belong to the
-Stage-2 baseline runs and are never used for condition runs (`DECISIONS.md`
-D038). The count was set from the between-seed SD of the primary DV in those
-baseline runs: 0.093 (mean 1.127, n = 10). Compute is not binding: measured
-2026-11-12, a Gate 1-configuration run takes about 2.8 minutes with ten running
-in parallel, so 280 runs is roughly 80 minutes at ten workers.
+**Smallest effect size of interest.** **0.07 normalized-return units**
+(Stage-2 amendment, 2026-11-12; §12). It is fixed first, and the seed count
+is derived from it, not the other way round. It is 55% of the measured gap
+between the scripted anchor (1.0) and the non-EEG baseline agent (1.127).
+Effects smaller than 0.07 are not powered for, and the curriculum literature
+suggests plausible true effects may be smaller; this is recorded as a
+limitation, not a claim that such effects are uninteresting. Basis and
+literature: `DECISIONS.md` D041 and `docs/RELATED_WORK.md` (Wu, Dyer and
+Neyshabur, 2021).
+*Stage-1 text: "Stage-2 amendment, in units of the primary DV."*
+
+**Seeds.** The seed count per condition, N, is **the smallest multiple of 10,
+and at least 40, at which the registered test achieves ≥ 80% power to detect
+a difference of 0.07 normalized-return units**. It is determined by
+simulation before any condition run (Stage-2 amendment, 2026-11-12; §12).
+The simulation is fixed in advance:
+
+- **Test:** one contrast, one-sided permutation test on the difference of
+  interquartile means (25% trimmed mean), p = (1 + #{permuted ≥ observed}) /
+  (1 + permutations), at **α = .05/6 ≈ .0083**, the first Holm step. Power
+  computed there holds for every contrast in the family, whatever the order
+  of rejection.
+- **Data:** each group's N seed-level values are resampled with replacement
+  from the ten Stage-2 baseline per-seed DVs (`docs/stage2_baseline.json`);
+  0.07 is added to one group.
+- **Size:** 2,000 simulated experiments per candidate N, 2,000 permutations
+  each, `default_rng(0)`. Candidates N = 40, 50, 60, … in order; the first
+  with power ≥ 0.80 is N.
+
+The same N seeds, **1001 to 1000 + N**, are used in every condition. Seeds
+101–110 belong to the Stage-2 baseline runs and are never used for condition
+runs (`DECISIONS.md` D038). Compute is not binding: measured 2026-11-12, a
+Gate 1-configuration run takes about 2.8 minutes with ten running in
+parallel, so 280 runs (N = 40) is roughly 80 minutes at ten workers.
 *Stage-1 text: "Target ≥10 per condition, ~70 runs. Final count set in the
 Stage-2 amendment from Gate 1 variance."*
-
-**Smallest effect size of interest.** **0.07 normalized-return units**
-(Stage-2 amendment, 2026-11-12; §12). The smallest effect of interest is 0.07
-normalized-return units, equal to this design's Holm-corrected detection limit
-at 40 seeds per condition. This is 55% of the measured gap between the
-scripted anchor (1.0) and the non-EEG baseline agent (1.127). The design
-cannot resolve smaller effects, and the curriculum literature suggests
-plausible true effects may be smaller; this is recorded as a limitation, not
-a claim that such effects are uninteresting. Basis and literature:
-`DECISIONS.md` D041 and `docs/RELATED_WORK.md` (Wu, Dyer and Neyshabur, 2021).
-*Stage-1 text: "Stage-2 amendment, in units of the primary DV."*
 
 **Primary contrast family**, Holm-corrected at family-wise α = .05, directions
 fixed in advance:
@@ -514,8 +530,9 @@ reason, and whether outcome data had been seen.
 | 2026-11-12 | §4, §6, §10 Gate 2 | **Clarification, no design change.** Reaction time is defined: onset of TELEGRAPH to the first new dodge or movement input, in simulation ticks, window to the end of RECOVERY, anticipations under 100 ms excluded from the median, non-responses and censored attacks counted separately. `scripts/play.py` logs the raw per-step input. See `DECISIONS.md` D037. | §4 and §10 used median reaction time without defining it, and the recorder did not log it. It must be fixed before the human session. | No human session had been run. Gate 1 agent data had been seen; it contains no reaction times. No condition data existed. |
 | 2026-11-12 | §4 | **Clarification, no design change.** `STATIC`'s fixed configuration is 7, the upper median of the training configurations by the pooled Gate 1 agent ordering. See `DECISIONS.md` D040. | §4 said "fixed configuration" without naming one. | Gate 1 per-configuration agent results had been seen and the rule uses them. No condition, human or EEG data existed. |
 | 2026-11-12 | §9 | **Stage-2 amendment, pre-specified in §0.** Seeds per condition set to **40 (280 runs)**, from the Stage-1 target of "≥10 per condition, ~70 runs": a fourfold increase. Smallest effect size of interest set to **0.07 normalized-return units**, the Holm-corrected detection limit at 40 seeds and 55% of the gap between the scripted anchor (1.0) and the baseline agent (1.127). Effects smaller than this cannot be resolved; that is recorded as a limitation, not a claim that they are uninteresting. See `DECISIONS.md` D041. | §0 deferred both until seed-to-seed variance had been measured. The Stage-2 baseline runs (seeds 101–110, uniform sampling over the 20 training configurations, D038) give a primary-DV SD of 0.093. At 10 seeds per condition, only differences of roughly 0.12 DV units or more would be reliably detectable; at 40, roughly 0.05–0.07 (D041). | **No condition data had been collected.** No run of any of the seven conditions existed, and the curriculum sampler had not been written. The agent data seen were the Gate 1 baseline runs (D034) and the Stage-2 baseline runs (D038). The latter use `RANDOM`'s training distribution, but on reserved seeds that are never reused or pooled into `RANDOM`, so they are not condition data. |
+| 2026-11-12 | §9 | **Revision of the Stage-2 amendment, same day, before the Stage-2 tag.** The dependency is reversed. The smallest effect of interest (0.07, unchanged) is now fixed on its own. The seed count is no longer fixed at 40. It is the smallest multiple of 10 (floor 40) at which the registered test has ≥ 80% power to detect 0.07, found by a simulation whose test, α (.05/6), data model (bootstrap from the Stage-2 baseline DVs) and size (2,000 × 2,000, seed 0) are fixed here before it is run. Seeds 1001 to 1000 + N, shared across conditions. See `DECISIONS.md` D041. | The committed amendment (`55d14b7`) justified 0.07 as "equal to the detection limit at 40 seeds": the threshold was derived from the seed count. That makes the effect of interest a by-product of a budget choice. It also rested on a t-test approximation, not the registered IQM permutation test, so 80% power at 0.07 with 40 seeds was unverified. | **No condition data had been collected.** No condition run existed, the curriculum sampler had not been written, and the power simulation had not been run. Agent data seen: the Gate 1 and Stage-2 baseline runs only. |
 
-**Stage-2 lock complete (2026-11-12).** Any further change is a deviation.
+**Stage-2 lock complete (2026-11-12),** tagged `prereg-v2.0`. Any further change is a deviation.
 
 ---
 
