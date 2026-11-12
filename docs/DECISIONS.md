@@ -1196,6 +1196,10 @@ proposal, adopted by Ryan). Implemented in `evaluation/reaction.py`;
 - **Per configuration:** the median over responses. Longer is harder, so it
   ranks in the same direction as damage taken.
 
+The window ending at RECOVERY and the 100 ms anticipation cutoff were
+additions to the accepted proposal; Ryan confirmed both explicitly the same
+day, before any session.
+
 **Why the window runs to the end of RECOVERY, not ACTIVE.** At the shortest
 telegraph a jab goes from onset to resolution in 6 ticks (200 ms), under a
 typical human simple reaction time. A window ending at resolution would
