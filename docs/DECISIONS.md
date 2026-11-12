@@ -1381,3 +1381,65 @@ damage), which had been seen. It uses no condition, human or EEG data. The
 rule is mechanical given that ordering, and configuration 7 is not a
 held-out cell.
 
+---
+
+## D041 — Stage-2 amendment: 40 seeds per condition
+
+**Status:** CONFIRMED (2026-11-12, Ryan). Seed count and smallest effect
+size of interest together, as the single amendment §0 calls for, committed
+in one commit. This completes the Stage-2 lock.
+
+**Decision.** 40 seeds per condition, 280 runs over the seven conditions,
+replacing §9's Stage-1 target of "≥10 per condition, ~70 runs". The same 40
+seeds in every condition, as §4's seed crossing requires. Seeds 101–110 are
+excluded (D038 firewall).
+
+**Input.** The Stage-2 baseline runs (D038): primary DV mean 1.127, SD 0.093
+over seeds 101–110.
+
+**What 40 buys (Claude's approximation, for context only).** Two-sample
+t-test, 80% power, SD 0.093. The registered analysis is a permutation test
+on interquartile-mean differences, so these figures are indicative only.
+
+| Test level | d detectable | DV units |
+|---|---|---|
+| One-sided α/6 (first Holm step) | 0.74 | 0.069 |
+| Two-sided .05 | 0.63 | 0.059 |
+| One-sided α (last Holm step) | 0.56 | 0.052 |
+
+At 10 seeds the two-sided figure is d ≈ 1.32, about 0.12 units.
+
+**Smallest effect size of interest: 0.07 normalized-return units.** Ryan's
+statement, recorded verbatim in pre-registration §9:
+
+> The smallest effect of interest is 0.07 normalized-return units, equal to
+> this design's Holm-corrected detection limit at 40 seeds per condition.
+> This is 55% of the measured gap between the scripted anchor (1.0) and the
+> non-EEG baseline agent (1.127). The design cannot resolve smaller effects,
+> and the curriculum literature suggests plausible true effects may be
+> smaller; this is recorded as a limitation, not a claim that such effects
+> are uninteresting.
+
+- **Where 0.07 comes from:** the first-Holm-step row of the table above,
+  0.0687, rounded up. That is the strictest step (one-sided α/6), so the
+  choice is the conservative one.
+- **The arithmetic:** 0.07 / (1.127 − 1.0) = 0.55.
+- **"Equal to" is approximate.** The detection limit was computed with a
+  t-test, but the registered inference is a permutation test on
+  interquartile-mean differences. The IQM discards the outer half of the
+  seeds, so under near-normal seed spread it is less efficient than the
+  mean, and the registered test's true limit is probably somewhat above
+  0.069. A power simulation of the registered test would settle it. That
+  is a check on power, not a change to the threshold.
+- **The literature claim:** Wu, Dyer and Neyshabur (2021),
+  `docs/RELATED_WORK.md`, find curriculum benefits marginal on standard
+  benchmarks. That is supervised learning, not RL, so it supports
+  "plausible", not more.
+
+**Open: the seed numbers.** They must be fixed before any condition run, so
+they cannot be chosen after the fact.
+
+**Caveat.** 0.093 is the spread under uniform sampling. `STATIC` and the
+curriculum conditions may vary more between seeds. Forty seeds leaves margin
+for that.
+
