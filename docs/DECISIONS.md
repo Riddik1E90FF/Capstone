@@ -1234,7 +1234,30 @@ training configuration, and it must be fixed before condition runs.
 
 ## D039 — Primary DV: floor-anchored normalized return
 
-**Status:** CONFIRMED (2026-11-12). The anchors are PENDING measurement.
+**Status:** CONFIRMED (2026-11-12). **Anchors measured 2026-11-12** from a
+clean tree at `99630f0` by `scripts/measure_return_anchors.py`, and recorded
+in `docs/return_anchors.json`. Mean damage taken reproduced
+`docs/gate1_floors.json` exactly for both policies, so the anchors and the
+Gate 1 floors are the same episodes.
+
+- **The median gap** (scripted − random) over all 25 configurations is
+  88.374. Scripted beats random on every configuration.
+- **No configuration needs the small-denominator fallback.** The smallest
+  gap is 51.05, at configuration 0.
+- **Held-out gaps:**
+
+  | Configuration | Gap |
+  |---|---|
+  | 4 | 101.37 |
+  | 8 | 83.49 |
+  | 12 | 90.90 |
+  | 15 | 62.56 |
+  | 21 | 103.73 |
+
+  Each configuration's weight in the primary DV is proportional to
+  1 / gap, so configuration 15 weighs about 1.66 times as much as
+  configuration 21. Stated here so the weighting is visible rather than
+  implicit.
 
 **Definition.** For each held-out configuration c:
 
