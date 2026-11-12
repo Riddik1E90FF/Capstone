@@ -880,8 +880,28 @@ included.
 | Date | Commit | Levels | Result |
 |---|---|---|---|
 | 2026-11-01 | `1287319` | G1-a, G1-b | **PASS, first attempt.** 10 seeds, `combat:mix`, 500k steps, `runs/gate1/mix/`. **G1-a:** 10 of 10 seeds under the threshold of 60.3897; seed means 24.017–46.447. 8 of 10 also beat the scripted floor (46.13), which was context rather than a criterion. **G1-b:** PASS, 10 ≥ k = 8. Win rates 0.966–1.000, confirming D035: success rate would have been at ceiling and useless for ranking. Saturation flags only configuration 24, and only for seed 2 — fewer than the scripted floor's two flagged cells, so the agent dies less than the hand-written policy. `scripts/gate1_check.py`, results in `docs/gate1_result.json`. |
-| 2026-11-07 | `caf62bf` | G1-c | **PASS.** Observed spread in per-configuration mean damage taken, pooled across the 10 passing seeds, is **42.242**, against a 95th percentile of **2.337** from the configuration-label permutation null (10,000 permutations, seed 0). An 18x margin: the ordering across the 25 configurations is not something label noise can manufacture. `spread_permutation_null` in `scripts/gate1_check.py`, tested in `tests/test_gate1_check.py`. |
+| 2026-11-07 | `caf62bf` + uncommitted; code in `b5dba93` | G1-c | **PASS.** Observed spread in per-configuration mean damage taken, pooled across the 10 passing seeds, is **42.242**, against a 95th percentile of **2.337** from the configuration-label permutation null (10,000 permutations, seed 0). An 18x margin: the ordering across the 25 configurations is not something label noise can manufacture. `spread_permutation_null` in `scripts/gate1_check.py`, tested in `tests/test_gate1_check.py`. |
 | | | **GATE 1** | **PASSED — G1-a, G1-b and G1-c all satisfied.** The learning problem works, reproducibly, with an ordered difficulty structure. The EEG half may now proceed against a validated environment. |
+
+*Correction, 2026-11-12 (provenance of the G1-c row).* The G1-c row first
+recorded the run as at commit `caf62bf`. At `caf62bf`,
+`spread_permutation_null` still raised `NotImplementedError`, and
+`tests/test_gate1_check.py` did not exist. The decision was run from a
+working tree at `caf62bf` that held the implementation and tests
+uncommitted, so the recorded commit could not reproduce the recorded result.
+Both were committed afterwards, unchanged, in `b5dba93`.
+`git diff caf62bf b5dba93 -- scripts/gate1_check.py` contains only the
+function body, its docstring and the `--skip-g1c` help text, which is the
+state that ran. The result itself is unaffected: the null is deterministic,
+using seed 0 and a draw pattern pinned by `test_matches_reference_draw_pattern`.
+Reproduced 2026-11-12 from the code at `b5dba93`, with no uncommitted code
+changes; the only uncommitted file was this one. `gate1_check.py` printed the
+same observed spread, 42.242, against the same 95th percentile, 2.337. Its
+JSON output was identical to `docs/gate1_result.json` in every result field.
+`floors_file` was not compared.
+A tree used for a gate decision should be committed first. The rule is the
+same one the Gate 1a calibration followed (`1c0c0ed`, before any NumPy-DQN
+run).
 
 **Diagnostics from the attempt** (descriptive, not criteria):
 
@@ -944,6 +964,9 @@ included.
    samples all 25 uniformly, so those runs would have to exclude the held-out
    cells to measure held-out performance at all.
 3. **Pooling rule for the Gate 2 agent ordering** is not stated in §6.
+   *Closed 2026-11-12 by D036.* Item 2's two definitions are fixed by D038
+   (held-out rule) and D039 (normalized return). The amendment itself still
+   waits on the draw, the floor-return anchors and the Stage-2 baseline runs.
 
 ### Hyperparameter sensitivity: decision rule, fixed 2026-11-01 before the sweep
 
@@ -1078,3 +1101,173 @@ median reaction time. They face the same ceiling, and consistency argues they
 should follow this change. They are part of the **independent variable**, so
 changing them is a larger step than changing a gate's metric and is not made
 here. Resolve before Gate 2.
+
+*Resolved 2026-11-12 by D037.*
+
+---
+
+## D036 — Gate 2: agent pooling rule and pass criterion
+
+**Status:** CONFIRMED (2026-11-12), before the human session. Closes D034 open
+item 3.
+
+**Agent ordering.** Per-configuration mean damage taken, pooled over every
+greedy evaluation episode of the ten Gate 1 seeds (10 × 200 per
+configuration, the same pooled dict `scripts/gate1_check.py` builds for G1-c),
+then ranked with mid-ranks.
+
+Rejected alternatives:
+- **Mean of per-seed ranks.** Robust to one seed's extreme magnitudes, but it
+  discards the size of differences and manufactures ties.
+- **Gating on the median of ten per-seed correlations.** This mostly measures
+  the agent's seed noise: pairwise seed Spearman averages +0.725 and falls to
+  +0.251 (D034 diagnostics). The ten per-seed correlations are still reported
+  descriptively.
+
+**Pass criterion.**
+- **The correlation:** Spearman ρ between the human per-configuration mean
+  damage taken and the pooled agent ordering, over all 25 configurations.
+- **The test:** one-sided permutation test, p < .05, 10,000 permutations of
+  the human ordering, `default_rng(0)`. That is roughly ρ > 0.34 at n = 25.
+- **Why a significance criterion rather than a fixed ρ bar:** "non-trivial"
+  in §10 is best read as "not producible by chance". A fixed bar like 0.5
+  would be a number with no derivation behind it.
+
+**Saturation.** Configurations flagged unreliable (over 25% of episodes
+saturated, on either side) stay in the primary correlation. The correlation
+without them is reported as a sensitivity analysis.
+
+**Stated openly: the gate will very likely pass.** The random-action floor
+correlates +0.96 with the trained agent, so much of any agreement is the
+grid's mechanical difficulty, not shared perception. Passing confirms the A3
+premise only in that weak sense. The informative output is where the human
+and agent orderings disagree. The largest per-configuration rank differences
+are pre-registered as a descriptive result relevant to M1-inv.
+
+**Reaction time** enters Gate 2 only as a secondary correlation. See D037 for
+why it is not yet defined.
+
+---
+
+## D037 — `PERF` and `BEHAV` order by mean damage taken
+
+**Status:** CONFIRMED (2026-11-12). Resolves the open item in D035. Changes the
+independent variable's definition, logged in pre-registration §12.
+
+- **`PERF`:** the agent's running per-configuration mean damage taken
+  (previously success rate).
+- **`BEHAV`:** the human's per-configuration mean damage taken and median
+  reaction time, each ranked with mid-ranks, ordered by the mean of the two
+  ranks (previously success rate and median reaction time).
+
+**Why.** Success rate is at its ceiling here: agent win rates are 0.966–1.000,
+and a competent policy wins 19 of 25 configurations outright (D035). A
+`PERF` ordering built on that is almost all ties, so the frontier sampler
+would run close to random. That weakens `NEURO` vs `PERF` (H2) in the
+direction that favours `NEURO`, which is a bias a reviewer would rightly
+attribute to the design. Mean damage taken is also the quantity every gate
+ranks by, so all orderings are now on one scale.
+
+**Left to the sampler's design:** the length of `PERF`'s running window, and
+how `PERF` orders configurations before it has data on them.
+
+**Open, blocking the human session: reaction time is undefined.** The
+pre-registration names median reaction time for `BEHAV` and Gate 2, but no
+definition exists and `scripts/play.py` does not log it. A definition is
+needed before the session, for example: time from telegraph onset to the
+player's first dodge or movement input, per attack faced; attacks with no
+response recorded separately rather than dropped. The recorder must then
+log it. Without it, `BEHAV` cannot be computed from the session.
+
+---
+
+## D038 — Held-out split: random transversal, corners excluded
+
+**Status:** CONFIRMED (2026-11-12) for the rule. The draw is PENDING: it runs
+after the rule and seed are committed.
+
+**Rule.**
+1. The held-out set is one configuration per telegraph level and one per gap
+   level, a transversal of the 5 × 5 grid.
+2. Transversals containing configuration 0 or 24 are excluded. That leaves
+   78 of 120.
+3. One is drawn uniformly. The 78 are enumerated in lexicographic order of
+   the gap-level permutation, and the index is drawn with
+   `default_rng(20261112).integers(78)`.
+4. `scripts/draw_heldout.py` refuses a tree with uncommitted changes and
+   refuses to overwrite `docs/heldout_split.json`.
+
+**Why a transversal.** Training keeps four levels of each axis and the test
+covers each axis's full range, so neither axis can go unrepresented on
+either side.
+
+**Why exclude the corners.** Configuration 0 is at ceiling: about 20 damage,
+always won. Configuration 24 is the only saturation-flagged cell. A held-out
+cell where conditions cannot differ wastes a fifth of the primary DV.
+
+**Rejected alternatives:**
+- **Hand-picked interior cells.** Chosen after seeing the Gate 1 grid, so
+  open to the charge of steering.
+- **The fixed diagonal 0, 6, 12, 18, 24.** Includes both corners.
+- **A hard-corner block.** Every condition floors, and the frontier sampler
+  loses its frontier.
+
+**Stated openly:** the Gate 1 per-configuration results were seen before
+this rule was written. The draw is random under a seed committed first, so
+that knowledge cannot choose the set.
+
+**Stage-2 baseline runs.**
+- **Design:** train on the 20 training configurations (uniform), and
+  evaluate on the 5 held-out ones with D039's normalized return.
+- **Why they are needed:** they supply the between-seed variance the Stage-2
+  amendment requires, in units of the primary DV.
+- **The firewall:** operationally they are the `RANDOM` condition. They are
+  therefore used **only** for the variance estimate, run on seeds that are
+  never reused as `RANDOM` condition data, and never pooled into any
+  condition's results.
+
+**Open: `STATIC`'s fixed configuration** is not specified in §4. It must be a
+training configuration, and it must be fixed before condition runs.
+
+---
+
+## D039 — Primary DV: floor-anchored normalized return
+
+**Status:** CONFIRMED (2026-11-12). The anchors are PENDING measurement.
+
+**Definition.** For each held-out configuration c:
+
+    normalized_c = (R_c − R_random,c) / (R_scripted,c − R_random,c)
+
+- **R_c:** the run's mean episode return over K = 200 greedy evaluation
+  episodes, on the Gate 1 evaluation seeds.
+- **The anchors:** the random-action and scripted policies' mean returns on
+  the same seeds, measured once and committed before any Stage-2 or
+  condition run.
+- **The primary DV:** the mean of normalized_c over the five held-out
+  configurations.
+
+**Small-denominator fallback.** If a held-out denominator is below 10% of the
+median denominator over all 25 configurations, the median denominator is used
+for that configuration.
+
+**What the choice actually decides.** The offset R_random,c cancels in
+every between-condition contrast. Only the denominators matter: they set the
+weight each held-out configuration carries in the mean. So the choice is
+between:
+- this one, where each configuration's weight is set by its
+  random-to-scripted gap;
+- raw return, where the weighting is accidental, set by return magnitude;
+- a z-score, where "one baseline SD" is a poor unit for a smallest effect
+  size.
+
+**Why these anchors.** They are standard practice (human-normalized Atari
+scores, as used by Agarwal et al. 2021, which §9 already follows), they are
+interpretable (0 = random, 1 = scripted), and both anchors are deterministic
+and exist before any condition run.
+
+**Rejected: anchoring 1 to the Gate 1 agent.** That anchor is noisy, and it
+is close to being the `RANDOM` condition itself.
+
+**Dependency.** The anchors are returns under the provisional reward
+(OPEN-06). A reward change re-measures them and is logged.

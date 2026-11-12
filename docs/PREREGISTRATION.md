@@ -116,8 +116,8 @@ ordering over configurations differs.**
 | `STATIC` | None; fixed configuration throughout |
 | `RANDOM` | None; uniform i.i.d. sampling over the training set |
 | `NEURO` | EEG-derived human difficulty index **(experimental condition)** |
-| `PERF` | The agent's own running per-configuration success rate |
-| `BEHAV` | Human success rate and median reaction time |
+| `PERF` | The agent's own running per-configuration mean damage taken |
+| `BEHAV` | Human per-configuration mean damage taken and median reaction time, ranked separately (mid-ranks), ordered by the mean of the two ranks |
 | `REVERSE` | EEG-derived index, rank-inverted |
 | `SHUFFLE` | EEG-derived index values permuted across configurations |
 
@@ -128,6 +128,12 @@ permutation is drawn once per seed from that seed and logged.
 
 `REVERSE` and `SHUFFLE` are deterministic transforms of the `NEURO` ordering and
 require no additional data collection.
+
+`PERF` and `BEHAV` were first defined by success rate. That rate sits at its
+ceiling in this environment, as D035 found, which would leave the `PERF`
+ordering almost all ties. On 2026-11-12, before any condition data existed,
+both were moved to mean damage taken, the quantity that ranks
+configurations at every gate. See `DECISIONS.md` D037 and §12.
 
 **Sampler requirement.** `NEURO`, `PERF`, `BEHAV`, `REVERSE` and `SHUFFLE` run
 through **one shared frontier-sampler implementation** with the ordering source
@@ -154,6 +160,24 @@ All other parameters constant across configurations.
 Five of the 25 configurations are reserved for generalization evaluation and are
 never sampled during training in any condition. The split is fixed before any
 experimental runs and recorded in the repository.
+
+**Selection rule (fixed 2026-11-12, before the draw; `DECISIONS.md` D038).**
+1. The held-out set is a *transversal* of the 5 × 5 grid: exactly one
+   configuration at each telegraph level and exactly one at each gap level.
+   Training then keeps four levels of each axis, and the test covers each
+   axis's full range.
+2. Transversals containing configuration 0 (easiest) or 24 (hardest) are
+   excluded. A held-out cell at the ceiling or at saturation spends a fifth
+   of the primary DV on a cell where conditions cannot differ. This leaves 78
+   of the 120 transversals.
+3. One of the 78 is drawn uniformly by `scripts/draw_heldout.py`, with seed
+   `HELDOUT_SEED = 20261112`. The seed is committed before the draw. The draw
+   refuses to run from a tree with uncommitted changes, and it writes
+   `docs/heldout_split.json` once.
+
+Gate 1's per-configuration results were seen before this rule was written.
+The draw is random under a committed seed, so that knowledge cannot steer
+which configurations are held out.
 
 ### 5.3 Axis calibration (completed 2026-10-05)
 
@@ -215,7 +239,21 @@ experiment. The primary dependent variable remains mean normalized return on
 the held-out configuration set. These are distinct roles: one defines the
 curriculum's ordering, the other measures whether the curriculum helped.
 
-Agreement between systems is measured by Spearman rank correlation. The EEG index
+**Pooling the agent ordering (fixed 2026-11-12, before the human session; D036).**
+The agent side of Gate 2 is the per-configuration mean damage taken, pooled
+over every evaluation episode of every Gate 1 seed (10 × 200 per
+configuration), then ranked. Single-seed orderings are too noisy to stand in
+for "the agent": pairwise Spearman between seeds averages +0.725 and falls as
+low as +0.251. The ten per-seed correlations with the human ordering are
+reported descriptively as an uncertainty band. They are not the gate.
+
+**Flagged configurations stay in.** A configuration flagged unreliable for
+saturation, on either side, stays in the primary correlation, so the gate
+always runs over all 25. The correlation with the flagged configurations
+removed is reported as a sensitivity analysis.
+
+Agreement between systems is measured by Spearman rank correlation, with
+mid-ranks for ties (D034). The EEG index
 is never converted into a damage-taken equivalent or a difficulty percentage; it
 sorts 25 configurations and nothing more. The frontier sampler consumes an
 ordering, never calibrated magnitudes.
@@ -291,6 +329,34 @@ scale used by the STEW dataset.
 evaluated at end of training over K evaluation episodes per held-out
 configuration, exploration disabled, evaluation seeds distinct from training seeds.
 
+*Normalized return (defined 2026-11-12, D039).* For each held-out
+configuration c:
+
+    normalized_c = (R_c − R_random,c) / (R_scripted,c − R_random,c)
+
+- R_c is the run's mean episode return on c over K = 200 greedy evaluation
+  episodes, on the Gate 1 evaluation seeds (`evaluation/gate1.py`).
+- R_random,c and R_scripted,c are the random-action and scripted policies'
+  mean returns on the same seeds. They are measured once, before any Stage-2
+  or condition run, and committed.
+- 0 means random-policy level; 1 means scripted-policy level. Values above 1
+  are expected.
+- The primary DV for a run is the mean of normalized_c over the five held-out
+  configurations.
+
+*Small-denominator fallback.* If a held-out configuration's denominator,
+R_scripted,c − R_random,c, is below 10% of the median denominator over all 25
+configurations, the median denominator is used for that configuration. This
+is decided mechanically when the floors are measured and reported.
+
+*Note on interpretation.* The offset R_random,c cancels in every
+between-condition contrast. The denominators therefore only set how much
+each held-out configuration weighs in the mean.
+
+*Dependency on the reward.* The anchors are returns under the provisional
+reward (OPEN-06). If the reward changes, they are re-measured and the change
+is logged in §12.
+
 **Secondary.** Environment steps to a fixed performance threshold on the training
 set (sample efficiency); final performance on the training set (asymptotic).
 
@@ -361,6 +427,21 @@ see §12.
 **Gate 2 — human/agent difficulty correspondence.** Spearman correlation between
 human and agent per-configuration rankings is positive and non-trivial. **Uses no
 EEG.**
+*Operational criterion (fixed 2026-11-12, before the human session; D036).*
+- **The test:** Spearman ρ (mid-ranks) between two orderings over all 25
+  configurations:
+  - the human per-configuration mean damage taken;
+  - the pooled agent ordering of §6.
+- **Pass condition:** a one-sided permutation test gives p < .05, using
+  10,000 permutations of the human ordering with seed 0. With 25
+  configurations this is roughly ρ > 0.34.
+- **Expect it to pass.** The random-action floor already correlates +0.96
+  with the trained agent, so most agreement is the grid's built-in
+  difficulty. The configurations where human and agent ranks disagree most
+  are therefore pre-registered as a descriptive result. That disagreement is
+  the evidence that bears on M1-inv.
+- **Reaction time:** median reaction-time rank is reported against the agent
+  ordering as a secondary correlation. It is not part of the gate.
 *Fail →* the A3 premise does not hold for this environment. Adjust axes or
 human-like agent constraints and re-run before any EEG work.
 
@@ -412,6 +493,11 @@ reason, and whether outcome data had been seen.
 | 2026-10-07 | §10 Gate 1a | **Clarification, no design change.** Gate 1a's criteria operationalised in `DECISIONS.md` D029: CartPole-v1 benchmark, CleanRL `dqn.py` reference, four levels, and pass-criterion form. Thresholds are calibrated on reference runs before any NumPy-DQN benchmark run. Pointer added to §10. | §10 said "tracks a reference implementation's learning curve" without defining *tracks*. The criterion has to be fixed before the curves exist rather than judged afterward. | No. No DQN, reference, or experimental-condition data existed. |
 | 2026-10-14 | §5 Environment | **Environment behaviour change.** A tick on which agent and enemy both reach 0 health now resolves as `loss` (previously `win`, which paid the +60 win bonus and counted as a success). See `DECISIONS.md` D031. | Checking enemy death first rewarded trading the agent's life for the kill and counted mutual KOs as successes in the per-configuration rates used at Gates 1 and 2. | No. No agent-training, human-session or experimental-condition data existed. |
 | 2026-11-01 | §6, §10 Gate 1 | **Ranking quantity changed.** Gates 1 and 2 rank configurations by per-configuration **mean damage taken** instead of success rate. Success rate is retained as a secondary descriptive measure. Direction, saturation reporting and the boundary with §8 added to §6. Candidate metrics were evaluated empirically before the choice; see `DECISIONS.md` **D035**. | Floor measurement (D034) showed a competent policy wins 19 of 25 configurations outright, giving only 7 distinct success-rate values across 25 configurations. A rank built on that is ~76% ties, and the Gate 2 correlation would have been computed over a near-degenerate vector. Mean damage taken gives 22 of 25 distinct values for the same policy, responds to both difficulty axes near-equally (44.2 vs 43.9, ratio 1.01), and is what D026 calibrated the axes on. | No. No agent has been trained on the combat environment, no human session has been run, and no experimental-condition data exists. The defect was found in the pre-training floors, which exist to be measured before the gate they calibrate. |
+
+| 2026-11-12 | §6, §10 Gate 2 | **Clarification, no design change.** Gate 2's agent ordering is defined as pooled across the Gate 1 seeds. Saturation-flagged configurations stay in the correlation, with a sensitivity analysis. "Non-trivial" is made operational as a one-sided permutation p < .05 (10,000 permutations, seed 0). See `DECISIONS.md` D036. | §10 required "positive and non-trivial" without defining either term, and §6 did not say how ten agent seeds become one ordering. Both must be fixed before the human session. Otherwise they become choices made after seeing the correlation. | Gate 1 baseline agent data had been seen (per-configuration damage, seed-to-seed rank stability). No human-session, EEG or condition data existed. |
+| 2026-11-12 | §4 | **Independent-variable definition changed.** `PERF` and `BEHAV` order configurations by mean damage taken; `BEHAV` uses the mean of its damage and reaction-time mid-ranks. They were previously defined by success rate. See `DECISIONS.md` D037. | D035 showed success rate at ceiling in this environment (agent win rates 0.966–1.000). A `PERF` ordering built on it would be almost all ties, and the frontier sampler would act close to random. That would weaken the H2 contrasts in a direction that favours `NEURO`. | Gate 1 baseline agent data had been seen. No human-session, EEG or condition data existed. No curriculum sampler existed. |
+| 2026-11-12 | §5.2 | **Clarification, no design change.** The held-out selection rule is fixed: a random transversal excluding configurations 0 and 24, drawn with `HELDOUT_SEED = 20261112`, committed before the draw. See `DECISIONS.md` D038. | §5.2 said "five of 25" without saying which five or how they are chosen. | Gate 1 per-configuration results had been seen. The set is drawn at random under a seed committed before the draw, so that knowledge cannot steer it. No condition data existed. |
+| 2026-11-12 | §8 | **Clarification, no design change.** "Normalized return" is defined as (R − R_random) / (R_scripted − R_random) per held-out configuration, averaged over the five, with K = 200 and a small-denominator fallback. See `DECISIONS.md` D039. | §8 named the primary DV but never defined the normalization, and the Stage-2 smallest effect size has to be stated in its units. | The Gate 1 baseline agents' training-episode returns exist in their run logs. No greedy evaluation return on any configuration had been computed, and floor returns had not been measured. No condition data existed. |
 
 **Pending and expected:** the Stage-2 amendment to §9 (seed count, smallest
 effect size) after Gate 1.
