@@ -113,7 +113,7 @@ ordering over configurations differs.**
 
 | ID | Ordering source |
 |---|---|
-| `STATIC` | None; fixed configuration throughout |
+| `STATIC` | None; fixed configuration throughout (configuration 7, `DECISIONS.md` D040) |
 | `RANDOM` | None; uniform i.i.d. sampling over the training set |
 | `NEURO` | EEG-derived human difficulty index **(experimental condition)** |
 | `PERF` | The agent's own running per-configuration mean damage taken |
@@ -498,6 +498,8 @@ reason, and whether outcome data had been seen.
 | 2026-11-12 | §4 | **Independent-variable definition changed.** `PERF` and `BEHAV` order configurations by mean damage taken; `BEHAV` uses the mean of its damage and reaction-time mid-ranks. They were previously defined by success rate. See `DECISIONS.md` D037. | D035 showed success rate at ceiling in this environment (agent win rates 0.966–1.000). A `PERF` ordering built on it would be almost all ties, and the frontier sampler would act close to random. That would weaken the H2 contrasts in a direction that favours `NEURO`. | Gate 1 baseline agent data had been seen. No human-session, EEG or condition data existed. No curriculum sampler existed. |
 | 2026-11-12 | §5.2 | **Clarification, no design change.** The held-out selection rule is fixed: a random transversal excluding configurations 0 and 24, drawn with `HELDOUT_SEED = 20261112`, committed before the draw. See `DECISIONS.md` D038. | §5.2 said "five of 25" without saying which five or how they are chosen. | Gate 1 per-configuration results had been seen. The set is drawn at random under a seed committed before the draw, so that knowledge cannot steer it. No condition data existed. |
 | 2026-11-12 | §8 | **Clarification, no design change.** "Normalized return" is defined as (R − R_random) / (R_scripted − R_random) per held-out configuration, averaged over the five, with K = 200 and a small-denominator fallback. See `DECISIONS.md` D039. | §8 named the primary DV but never defined the normalization, and the Stage-2 smallest effect size has to be stated in its units. | The Gate 1 baseline agents' training-episode returns exist in their run logs. No greedy evaluation return on any configuration had been computed, and floor returns had not been measured. No condition data existed. |
+| 2026-11-12 | §4, §6, §10 Gate 2 | **Clarification, no design change.** Reaction time is defined: onset of TELEGRAPH to the first new dodge or movement input, in simulation ticks, window to the end of RECOVERY, anticipations under 100 ms excluded from the median, non-responses and censored attacks counted separately. `scripts/play.py` logs the raw per-step input. See `DECISIONS.md` D037. | §4 and §10 used median reaction time without defining it, and the recorder did not log it. It must be fixed before the human session. | No human session had been run. Gate 1 agent data had been seen; it contains no reaction times. No condition data existed. |
+| 2026-11-12 | §4 | **Clarification, no design change.** `STATIC`'s fixed configuration is 7, the upper median of the training configurations by the pooled Gate 1 agent ordering. See `DECISIONS.md` D040. | §4 said "fixed configuration" without naming one. | Gate 1 per-configuration agent results had been seen and the rule uses them. No condition, human or EEG data existed. |
 
 **Pending and expected:** the Stage-2 amendment to §9 (seed count, smallest
 effect size) after Gate 1.

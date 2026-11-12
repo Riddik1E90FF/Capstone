@@ -20,6 +20,9 @@ Usage:
 Environment ids:
     CartPole-v1 (or any Gymnasium id)   dev-only; needs requirements-dev.txt
     combat:<config_id>                  combat_env difficulty cell 0..24
+    combat:mix                          uniform over all 25 cells, per episode
+    combat:train                        uniform over the 20 training cells of
+                                        docs/heldout_split.json (D038)
 
 The run directory is runs/<env>__<tag>__seed<N>__<UTC timestamp>/ unless
 --run-dir is given.  An existing non-empty directory is never overwritten.
@@ -66,7 +69,11 @@ _SELECTOR_DOMAIN = 0x6D6978          # "mix"
 
 
 class _MixtureEnv:
-    """Uniform mixture over all 25 configurations, drawn per episode.
+    """Uniform mixture over a set of configurations, drawn per episode.
+
+    The set is all 25 for ``combat:mix`` and the 20 training configurations
+    for ``combat:train``.  With all 25 the draw is exactly the one Gate 1
+    trained with, so ``combat:mix`` runs are unchanged.
 
     The selection has to happen in ``reset``, not in the factory.  ``train``
     calls ``env_fn`` exactly once per run and then advances episodes with bare
@@ -86,10 +93,12 @@ class _MixtureEnv:
     without a seed.
     """
 
-    def __init__(self, seed: int | None) -> None:
+    def __init__(self, seed: int | None, config_ids: tuple[int, ...] | None = None) -> None:
         from combat_env import N_CONFIGS
 
-        self._n_configs = N_CONFIGS
+        self._config_ids = tuple(range(N_CONFIGS)) if config_ids is None else tuple(config_ids)
+        if not self._config_ids:
+            raise ValueError("a mixture needs at least one configuration")
         self._rng = self._selector_rng(seed)
         self._envs: dict[int, Any] = {}
         self._env: Any = None
@@ -108,8 +117,8 @@ class _MixtureEnv:
         return self._config_id
 
     def _draw_config(self) -> int:
-        """Uniform over all configurations.  The curriculum sampler goes here."""
-        return int(self._rng.integers(self._n_configs))
+        """Uniform over the configuration set.  The curriculum sampler goes here."""
+        return self._config_ids[int(self._rng.integers(len(self._config_ids)))]
 
     def reset(self, seed: int | None = None, **kwargs: Any) -> tuple[Any, dict]:
         from combat_env import make_env
@@ -160,9 +169,27 @@ class _MixtureEnv:
         return f"_MixtureEnv(config_id={self._config_id})"
 
 
-def _mixture_factory() -> EnvFactory:
-    """EnvFactory for ``combat:mix``: same (seed) -> env shape as a single cell."""
-    return lambda seed: _MixtureEnv(seed)
+def _mixture_factory(config_ids: tuple[int, ...] | None = None) -> EnvFactory:
+    """EnvFactory for a mixture: same (seed) -> env shape as a single cell."""
+    return lambda seed: _MixtureEnv(seed, config_ids)
+
+
+SPLIT_PATH = REPO_ROOT / "docs" / "heldout_split.json"
+
+
+def training_configs(split_path: Path = SPLIT_PATH) -> tuple[int, ...]:
+    """The 20 training configurations of the committed held-out split (D038).
+
+    Checked against the held-out list, so a hand-edited split file that lets
+    a held-out configuration into training fails here rather than silently.
+    """
+    from combat_env import N_CONFIGS
+
+    rec = json.loads(Path(split_path).read_text(encoding="utf-8"))
+    training, held_out = sorted(rec["training"]), sorted(rec["held_out"])
+    if set(training) & set(held_out) or sorted(training + held_out) != list(range(N_CONFIGS)):
+        raise SystemExit(f"{split_path}: training and held-out sets do not partition 0..{N_CONFIGS - 1}")
+    return tuple(training)
 
 
 def make_env_factory(env_id: str) -> tuple[EnvFactory, int, int]:
@@ -172,6 +199,8 @@ def make_env_factory(env_id: str) -> tuple[EnvFactory, int, int]:
 
         if env_id == "combat:mix":
             return _mixture_factory(), OBS_DIM, N_ACTIONS
+        if env_id == "combat:train":
+            return _mixture_factory(training_configs()), OBS_DIM, N_ACTIONS
 
         try:
             config_id = int(env_id.split(":", 1)[1])
@@ -260,7 +289,10 @@ def main(argv: list[str] | None = None) -> int:
     # Imported here so --dry-run works even if the loop is broken.
     from dqn.train import train
 
-    with RunLogger(run_dir, cfg, extra_meta={"obs_dim": obs_dim, "n_actions": n_actions}) as logger:
+    extra_meta: dict[str, Any] = {"obs_dim": obs_dim, "n_actions": n_actions}
+    if cfg.env_id == "combat:train":
+        extra_meta["training_configs"] = list(training_configs())
+    with RunLogger(run_dir, cfg, extra_meta=extra_meta) as logger:
         print(f"run dir: {run_dir}")
         result = train(cfg, env_fn=env_fn, obs_dim=obs_dim, n_actions=n_actions, logger=logger)
         print(f"done: {result.global_steps} env steps, {result.episodes} episodes, "

@@ -106,3 +106,56 @@ def test_bad_combat_ids_still_rejected(bad):
     """The combat:mix branch must not have widened what combat: accepts."""
     with pytest.raises(SystemExit):
         make_env_factory(bad)
+
+
+# -- combat:train (D038) ----------------------------------------------------
+
+HELD_OUT = {4, 8, 12, 15, 21}
+
+
+def test_mix_draw_is_unchanged_by_the_generalization():
+    """combat:mix must draw exactly what Gate 1 trained on: the stream used
+    to be `integers(25)` straight off the selector, with no indirection."""
+    from train_dqn import _MixtureEnv
+    seed = 1
+    rng = _MixtureEnv._selector_rng(seed)
+    expected = []
+    seen = set()
+    for _ in range(60):
+        cid = int(rng.integers(N_CONFIGS))
+        expected.append(cid)
+        if cid not in seen:          # first visit draws the cell seed
+            seen.add(cid)
+            rng.integers(1 << 31)
+    f, _, _ = make_env_factory("combat:mix")
+    assert config_sequence(f, seed, 60) == expected
+
+
+def test_train_mixture_never_draws_a_held_out_configuration():
+    f, obs_dim, _ = make_env_factory("combat:train")
+    assert obs_dim == OBS_DIM
+    counts = Counter(config_sequence(f, 1234, 2000))
+    assert not set(counts) & HELD_OUT
+    assert set(counts) == set(range(N_CONFIGS)) - HELD_OUT
+    # 100 expected per cell
+    assert min(counts.values()) >= 50 and max(counts.values()) <= 160
+
+
+def test_train_mixture_is_deterministic():
+    f, _, _ = make_env_factory("combat:train")
+    assert config_sequence(f, 9, 80) == config_sequence(f, 9, 80)
+
+
+def test_training_configs_reads_the_committed_split():
+    from train_dqn import training_configs
+    assert training_configs() == tuple(c for c in range(N_CONFIGS) if c not in HELD_OUT)
+
+
+def test_training_configs_rejects_an_overlapping_split(tmp_path):
+    import json as _json
+    from train_dqn import training_configs
+    bad = tmp_path / "split.json"
+    bad.write_text(_json.dumps({"held_out": [4, 8, 12, 15, 21],
+                                "training": [c for c in range(N_CONFIGS) if c != 0]}))
+    with pytest.raises(SystemExit):
+        training_configs(bad)

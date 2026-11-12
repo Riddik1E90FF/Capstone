@@ -47,6 +47,8 @@ import numpy as np
 from combat_env import N_CONFIGS, Action, DifficultyConfig, make_env
 from combat_env.config import ATTACKS, TICK_HZ
 from combat_env.env import EnemyPhase
+from evaluation.reaction import (STEP_FIELDS, attack_responses, log_step,
+                                 summarize as summarize_reaction, wall_clock)
 
 SCALE = 55  # pixels per world unit
 PROBE_CONFIGS = (6, 12, 18)  # replayed at start, middle and end of a session
@@ -403,6 +405,8 @@ def play_episode(pygame, screen, fonts, config_id: int, seed: int,
     fx = Feedback(env)
     clock = pygame.time.Clock()
     t_start = time.time()
+    t0 = wall_clock()
+    steps: list[list] = []        # one row per step, for reaction time (D037)
 
     while True:
         for event in pygame.event.get():
@@ -414,6 +418,7 @@ def play_episode(pygame, screen, fonts, config_id: int, seed: int,
         action = read_action(pygame, pygame.key.get_pressed(),
                              pygame.mouse.get_pressed())
         _, _, terminated, truncated, info = env.step(action)
+        steps.append(log_step(env, action, wall_clock() - t0))
         fx.update(env)
         draw(pygame, screen, env, fx, fonts, label)
         clock.tick(TICK_HZ // env.p.action_repeat)
@@ -425,6 +430,9 @@ def play_episode(pygame, screen, fonts, config_id: int, seed: int,
                 "seed": seed,
                 "wall_start": t_start,
                 "wall_end": time.time(),
+                "reaction": summarize_reaction(attack_responses(steps)),
+                "step_fields": list(STEP_FIELDS),
+                "steps": steps,
             })
             return rec
 
@@ -475,7 +483,8 @@ def main() -> None:
             records.append(rec)
             print(f"{label} -> {rec['outcome']}  "
                   f"taken={rec['damage_taken']:.0f}  "
-                  f"dodge_rate={rec['dodge_rate']:.2f}")
+                  f"dodge_rate={rec['dodge_rate']:.2f}  "
+                  f"median_rt={rec['reaction']['median_rt_s']}")
     except SystemExit:
         pass
     finally:

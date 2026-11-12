@@ -1171,13 +1171,45 @@ ranks by, so all orderings are now on one scale.
 **Left to the sampler's design:** the length of `PERF`'s running window, and
 how `PERF` orders configurations before it has data on them.
 
-**Open, blocking the human session: reaction time is undefined.** The
-pre-registration names median reaction time for `BEHAV` and Gate 2, but no
-definition exists and `scripts/play.py` does not log it. A definition is
-needed before the session, for example: time from telegraph onset to the
-player's first dodge or movement input, per attack faced; attacks with no
-response recorded separately rather than dropped. The recorder must then
-log it. Without it, `BEHAV` cannot be computed from the session.
+**Reaction time, defined 2026-11-12** (before the human session; Claude's
+proposal, adopted by Ryan). Implemented in `evaluation/reaction.py`;
+`scripts/play.py` now records the raw per-step log it is computed from.
+
+- **Onset:** the simulation tick at which the enemy enters TELEGRAPH.
+- **Response:** the first *new* dodge or movement input after the decision
+  step containing onset. "New" means the step's action is DODGE or a MOVE
+  action and differs from the previous step's action. Holding a key through
+  onset is not a response; pressing one, or changing direction, is. The
+  onset step never counts: its input was chosen before the telegraph was on
+  screen.
+- **Reaction time:** the first tick the response was applied minus the onset
+  tick, in simulation time (30 Hz). Input is read once per decision step, so
+  the resolution is 66.7 ms. Wall time per step is logged too, to detect
+  dropped frames, but is not the measure.
+- **Window:** onset to the end of that attack's RECOVERY phase. A response
+  after the attack has resolved still counts, and is flagged.
+- **Anticipations:** responses under 100 ms (3 ticks) are recorded and
+  excluded from the median. That is too fast to be a reaction to the
+  telegraph.
+- **No response / censored:** no qualifying input in the window, or the
+  episode ended inside it. Both are counted per configuration, never dropped.
+- **Per configuration:** the median over responses. Longer is harder, so it
+  ranks in the same direction as damage taken.
+
+**Why the window runs to the end of RECOVERY, not ACTIVE.** At the shortest
+telegraph a jab goes from onset to resolution in 6 ticks (200 ms), under a
+typical human simple reaction time. A window ending at resolution would
+record nearly every hard attack as a non-response, and the median would be
+built only from anticipations and lucky guesses. Ending at RECOVERY (at
+least 500 ms) keeps late reactions measurable.
+
+**Stated limitations.**
+- Block is not a response under this definition. The raw log keeps every
+  input, so a block-inclusive variant can be computed as a sensitivity
+  analysis.
+- At the shortest telegraphs a sizeable share of attacks may still be
+  non-responses, and the median then describes only the attacks answered.
+  The non-response rate is reported beside it for that reason.
 
 ---
 
@@ -1226,9 +1258,14 @@ that knowledge cannot choose the set.
   therefore used **only** for the variance estimate, run on seeds that are
   never reused as `RANDOM` condition data, and never pooled into any
   condition's results.
+- **Seeds (2026-11-12, Ryan): 101–110**, ten seeds, matching Gate 1's count.
+  They are reserved (`RESERVED_SEEDS` in `scripts/stage2_baseline.py`):
+  condition runs must use a range that excludes them, and a test should
+  assert that when the condition launcher exists. The environment is
+  `combat:train`, uniform over the 20 training configurations. Everything
+  else is Gate 1's configuration unchanged.
 
-**Open: `STATIC`'s fixed configuration** is not specified in §4. It must be a
-training configuration, and it must be fixed before condition runs.
+**`STATIC`'s fixed configuration:** resolved by D040 (configuration 7).
 
 ---
 
@@ -1295,3 +1332,41 @@ is close to being the `RANDOM` condition itself.
 
 **Dependency.** The anchors are returns under the provisional reward
 (OPEN-06). A reward change re-measures them and is logged.
+
+---
+
+## D040 — `STATIC` trains on configuration 7
+
+**Status:** CONFIRMED (2026-11-12). Claude's proposal; Ryan accepted it in
+advance ("I'll take your proposal"). Fills a gap in §4, logged in §12.
+
+**Rule.** Rank the 20 training configurations by the D036 pooled Gate 1
+agent ordering (mean damage taken over all ten seeds' evaluation episodes)
+and take the **upper median**: rank 11 of 20, ascending. That is
+configuration **7** (telegraph level 1, gap level 2), pooled mean damage
+34.443.
+
+**Why median difficulty.** `STATIC` is the no-curriculum control. Fixed at
+the easy end (configuration 0, about 20 damage, always won) it would learn
+little that transfers, and `NEURO` would beat it trivially. Fixed at the hard
+end (configuration 24, the only saturation-flagged cell) it risks a floor.
+Either way the comparison would be against a strawman, which a reviewer
+would discount. A median-difficulty cell is a fair fixed setting.
+
+**Why the upper median.** With 20 cells the median falls between ranks 10
+and 11. The lower median is not well defined: configurations 3 (33.069) and
+16 (33.069) differ by 0.0007 damage, far inside seed noise. The upper median
+is clear of its neighbours (1.37 below, 3.59 above).
+
+**Rejected alternatives:**
+- **The grid centre.** Configuration 12 is held out.
+- **A random draw from the training set.** It could land on a corner and
+  produce the strawman above.
+- **The hardest training cell.** "Train on the hardest" is a defensible
+  heuristic, but here it is configuration 24, the saturation-flagged one.
+
+**Stated openly:** the choice uses Gate 1 data (the agent's per-configuration
+damage), which had been seen. It uses no condition, human or EEG data. The
+rule is mechanical given that ordering, and configuration 7 is not a
+held-out cell.
+
