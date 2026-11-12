@@ -1264,6 +1264,13 @@ that knowledge cannot choose the set.
   assert that when the condition launcher exists. The environment is
   `combat:train`, uniform over the 20 training configurations. Everything
   else is Gate 1's configuration unchanged.
+- **Run 2026-11-12** from a clean tree at `1cba31a`; results in
+  `docs/stage2_baseline.json`. Primary DV per seed 0.940–1.260,
+  **mean 1.127, SD 0.093** (n = 10, ddof = 1). Every seed beats the scripted
+  anchor on average. The lowest seed (103) is low mainly on configuration 4
+  (normalized 0.399; next lowest 0.807). This SD is the input to the Stage-2
+  amendment; it is the `RANDOM`-like condition's spread, and other
+  conditions may vary more.
 
 **`STATIC`'s fixed configuration:** resolved by D040 (configuration 7).
 
