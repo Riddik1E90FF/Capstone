@@ -1471,3 +1471,23 @@ problem: the committed statement set 0.07 as "equal to the detection limit at
   core and Claude writes the harness and tests. Its result and N are
   recorded here, committed, before the condition launcher runs.
 
+**Result, 2026-11-16.** Run from a clean tree at `699064a` by
+`scripts/stage2_power.py`; record in `docs/stage2_power.json`. Power at
+n = 40 is **0.860** (Monte Carlo SE about 0.008), above 0.80 at the first
+candidate. **N = 40 seeds per condition, seeds 1001–1040, 280 runs.**
+
+- **Authorship:** `power_at` follows Ryan's ten-step outline. The body was
+  written by Claude at Ryan's request.
+- **Why higher than the t-approximation (about 0.80 at 0.069):** two
+  reasons, and the second flatters the design.
+  - The IQM trims seed 103's low value, so on this data it is more
+    efficient than the mean. That is the robustness the registered test was
+    chosen for.
+  - Resampling from ten values reproduces their spread with ddof = 0: an SD
+    of about 0.088, not 0.093. Ten values also cannot produce tails wider
+    than the ten observed.
+- **What the result therefore claims:** 0.86 is power under the measured
+  baseline distribution. Under the caveat above (other conditions may vary
+  more), true power at 40 could be lower. Recorded as a limitation, not
+  acted on: the rule was fixed before the run, and it gives 40.
+

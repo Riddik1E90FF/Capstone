@@ -1,0 +1,38 @@
+{
+  "rule": "pre-registration \u00a79, D041",
+  "created_utc": "2026-11-16T22:11:02.082516+00:00",
+  "git_commit": "699064adf5d7a49e1631ff74e22156eebaf2bc0a",
+  "python": "3.12.4",
+  "numpy": "2.5.4",
+  "values_source": "docs/stage2_baseline.json",
+  "values": [
+    1.038145210403449,
+    1.0908973773282618,
+    0.940020557430827,
+    1.1619303930639222,
+    1.2595820305978536,
+    1.0864266804592788,
+    1.2304249478839269,
+    1.1724459747742233,
+    1.1544295817137207,
+    1.1362374543280824
+  ],
+  "delta": 0.07,
+  "alpha": 0.008333333333333333,
+  "target_power": 0.8,
+  "n_sims": 2000,
+  "n_perm": 2000,
+  "sim_seed": 0,
+  "rng": "fresh default_rng(sim_seed) per candidate",
+  "floor": 40,
+  "step": 10,
+  "power": {
+    "40": 0.86
+  },
+  "n_per_condition": 40,
+  "seeds": [
+    1001,
+    1040
+  ],
+  "wall_seconds": 23.0
+}
